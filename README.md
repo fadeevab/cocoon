@@ -1,2 +1,2 @@
 # cocoon
-Simple and relyable secure storage with strong encryption and format validation.
+Simple secure container with strong encryption and format validation.
