@@ -1,15 +1,32 @@
 [package]
 name = "cocoon"
 version = "0.1.0"
-description = "Simple secure container with strong encryption and format validation."
+description = "A simple protected container with strong encryption and format validation."
 authors = ["Alexander Fadeev <fadeevab.com@gmail.com>"]
 edition = "2018"
 license = "MIT"
 keywords = ["secure", "storage", "keystore", "wrapper", "container"]
-categories = ["encoding", "cryptography"]
+categories = ["encoding", "no-std"]
 homepage = "https://github.com/fadeevab/cocoon"
 repository = "https://github.com/fadeevab/cocoon"
 documentation = "https://docs.rs/cocoon"
 readme = "README.md"
 
 [dependencies]
+chacha20poly1305 = { version = "0.4.1", default-features = false, features = ["chacha20"] }
+hmac = "0.7.1"
+pbkdf2 = { version = "0.3.0", default-features = false, features = ["sha2", "hmac"] }
+rand = { version = "0.7.3", default-features = false }
+sha2 = { version = "0.8.1", default-features = false }
+zeroize = { version = "1.1.0", default-features = false }
+
+[features]
+default = ["std"]
+std = ["rand/std", "alloc"]
+alloc = ["chacha20poly1305/alloc"]
+getrandom = ["rand/getrandom"]
+heapless = ["chacha20poly1305/heapless"]
+debug = []
+
+[package.metadata.docs.rs]
+all-features = true
