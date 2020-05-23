@@ -6,13 +6,14 @@ authors = ["Alexander Fadeev <fadeevab.com@gmail.com>"]
 edition = "2018"
 license = "MIT"
 keywords = ["secure", "storage", "keystore", "wrapper", "container"]
-categories = ["encoding", "no-std"]
+categories = ["encoding", "no-std", "parser-implementations"]
 homepage = "https://github.com/fadeevab/cocoon"
 repository = "https://github.com/fadeevab/cocoon"
 documentation = "https://docs.rs/cocoon"
 readme = "README.md"
 
 [dependencies]
+aes-gcm = "0.5.0"
 chacha20poly1305 = { version = "0.4.1", default-features = false, features = ["chacha20"] }
 hmac = "0.7.1"
 pbkdf2 = { version = "0.3.0", default-features = false, features = ["sha2", "hmac"] }
@@ -22,10 +23,20 @@ zeroize = { version = "1.1.0", default-features = false }
 
 [features]
 default = ["std"]
-std = ["rand/std", "alloc"]
+
+# Enables all features, including support of simplified Cocoon API, using `rand::thread_rng`,
+# and API related to `std::io`: wrap to writer, unwrap from reader.
+std = ["alloc", "rand/std"]
+
+# Enables `Vec` container. Can be used without `std` crate (in "no std" build).
 alloc = ["chacha20poly1305/alloc"]
+
+# Enables support of Cocoon::from_entropy() which gets random bytes from OsRng.
 getrandom = ["rand/getrandom"]
-heapless = ["chacha20poly1305/heapless"]
+
+# Reduces the count of KDF iterations to 1000 which speeds up debugging.
+# However "debug" feature make a Cocoon container less secure, which format
+# becomes incompatible with the release build.
 debug = []
 
 [package.metadata.docs.rs]

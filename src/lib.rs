@@ -2,172 +2,290 @@
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs, unused_qualifications)]
+#![cfg_attr(not(feature = "std"), no_std)]
 
-use core::convert::TryInto;
+mod error;
+mod header;
+mod kdf;
 
-/// Error variants produced by the Cocoon API.
-#[derive(Debug, Clone, Copy)]
-pub enum Error {
-    /// Format is not recognized (probably, corrupted).
-    UnrecognizedFormat,
-    /// Cryptographic error. There could be a few reasons:
-    /// 1. Integrity is compromised.
-    /// 2. Password is invalid.
-    Cryptography,
-}
+#[cfg(feature = "alloc")]
+extern crate alloc;
 
-/// Supported AEAD (Authenticated Encryption with Associated Data) ciphers.
-/// Only 256-bit AEAD algorithms.
-#[derive(Clone, Copy)]
-pub enum Aead {
-    /// Chacha20-Poly1305.
-    Chacha20Poly1305 = 1,
-    /// AES256-GCM.
-    Aes256Gcm,
-}
+use aes_gcm::Aes256Gcm;
+use chacha20poly1305::{
+    aead::{generic_array::GenericArray, Aead, NewAead},
+    ChaCha20Poly1305,
+};
+#[cfg(feature = "std")]
+use rand::rngs::ThreadRng;
+use rand::{
+    rngs::StdRng,
+    {CryptoRng, RngCore, SeedableRng},
+};
 
-/// Supported key derivation functions (KDF) which are used to derive a master key
-/// from a user password.
-#[derive(Clone, Copy)]
-pub enum Kdf {
-    /// PBKDF2 with NIST SP 800-132 recommended parameters:
-    /// 1. Salt: 16 bytes (128-bit) + predefined salt.
-    /// 2. Iterations: 100 000 (1000 when "debug" feature is enabled).
-    Pbkdf2 = 1,
-    /// Argon2i.
-    Argon2i,
-}
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
+#[cfg(feature = "std")]
+use std::io::{Read, Write};
 
-/// A set of `Cocoon` container capabilities.
-/// Config is embedded to a container with a header.
-struct CocoonConfig {
-    /// Cipher.
-    cipher: Aead,
-    /// Key derivation function.
-    kdf: Kdf,
-    /// Reserved.
-    reserved1: [u8; 2],
-    /// KDF iterations.
-    kdf_iterations: u32,
-    /// Reserved.
-    reserved2: [u8; 4],
-}
+use header::{CocoonConfig, CocoonHeader};
 
-impl Default for CocoonConfig {
-    fn default() -> CocoonConfig {
-        CocoonConfig {
-            cipher: Aead::Chacha20Poly1305,
-            kdf: Kdf::Pbkdf2,
-            reserved1: [0u8; 2],
-            kdf_iterations: if cfg!(debug) {
-                // 1000 is the minimum according to NIST SP 800-132. 100_000 iterations is
-                // extremely slow in debug builds. `debug_assertions` is not used to prevent
-                // unintentional container incompatibility, so `debug` feature has to be
-                // explicitly specified.
-                1000
-            } else {
-                // NIST SP 800-132 (PBKDF2) recommends to choose an iteration count
-                // somewhere between 1000 and 10_000_000, so the password derivation function
-                // can not be brute forced easily.
-                100_000
-            },
-            reserved2: [0u8; 4],
-        }
-    }
-}
+pub use chacha20poly1305::aead::Buffer;
+pub use error::Error;
+pub use header::{CocoonCipher, CocoonKdf};
 
-impl CocoonConfig {
-    fn serialize(&self) -> [u8; 12] {
-        let mut buf = [0u8; 12];
-        buf[0] = self.cipher as u8;
-        buf[1] = self.kdf as u8;
-        buf[2..4].copy_from_slice(&self.reserved1);
-        buf[4..8].copy_from_slice(&self.kdf_iterations.to_be_bytes());
-        buf[9..12].copy_from_slice(&self.reserved2);
-        buf
-    }
+/// A header size which prefixes the encrypted data.
+const HEADER_SIZE: usize = CocoonHeader::SIZE;
+/// All currently supported AEAD algorithms declare tag size as 16 bytes.
+const TAG_SIZE: usize = 16;
 
-    fn deserialize(buf: &[u8]) -> Result<Self, Error> {
-        let mut this = CocoonConfig::default();
-        this.cipher = match buf[0] {
-            cipher if cipher == Aead::Chacha20Poly1305 as u8 => Aead::Chacha20Poly1305,
-            cipher if cipher == Aead::Aes256Gcm as u8 => Aead::Aes256Gcm,
-            _ => return Err(Error::UnrecognizedFormat),
-        };
-        this.kdf = match buf[1] {
-            kdf if kdf == Kdf::Pbkdf2 as u8 => Kdf::Pbkdf2,
-            kdf if kdf == Kdf::Argon2i as u8 => Kdf::Argon2i,
-            _ => return Err(Error::UnrecognizedFormat),
-        };
-        this.kdf_iterations = u32::from_be_bytes(buf[4..8].try_into().unwrap());
-        Ok(this)
-    }
-}
-
-/// Header of the protected container.
+/// Detached parts contain header and tag (signature).
 ///
-/// 1. A magic number.
-/// 2. A version.
-/// 3. A randomly generated salt for a master key.
-/// 4. A set of container options.
-/// 5. A length of encrypted data.
-///
-/// ```
-/// Header {
-///    3 bytes: 0x7f 0xc0 '\n'
-///    1 byte : 0x01
-///   16 bytes: <salt>
-///   12 bytes: 0x01 0x01 0x00 0x00 0x00 0x01 0x86 0xa0 0x00 0x00 0x00 0x00
-///    8 bytes: <length>
-///  }
-/// ```
-pub struct Header {
-    /// A magic number makes a container suitable for storing in file,
-    /// and basically it is to prevent an unintended processing of incompatible data structure.
-    magic: [u8; 3],
-    /// A version allows to upgrade the format in future.
-    version: u8,
-    /// 16 bytes of salt (128-bit) is a minimum for PBKDF2 according to NIST recommendations.
-    salt: [u8; 16],
-    /// Container settings.
+/// The structure is used in the `encrypt` and `decrypt` methods,
+/// and it is useful with no `std` and no `alloc` build configuration.
+pub struct CocoonDetachedParts {
+    /// Serialized opaque header.
+    ///
+    /// It is needed to derive master key from a password and decrypt data.
+    pub header: [u8; HEADER_SIZE],
+    /// Authentication tag.
+    ///
+    /// It is needed to verify integrity of the whole container.
+    pub tag: [u8; TAG_SIZE],
+}
+
+/// Cocoon is a simple encrypted container suitable
+pub struct Cocoon<'a, R: CryptoRng + RngCore> {
+    password: &'a [u8],
+    rng: R,
     config: CocoonConfig,
-    /// 8 bytes of length (64-bit) allows to handle up to 256GB of Chacha20/AES256 cipher data.
-    length: usize,
 }
 
-impl Default for Header {
-    fn default() -> Self {
-        Header {
-            magic: Header::MAGIC,
-            version: Header::VERSION,
-            salt: Default::default(),
+#[cfg(feature = "std")]
+impl<'a> Cocoon<'a, ThreadRng> {
+    /// Allocates random generator and prepares configuration.
+    pub fn new(password: &'a [u8]) -> Self {
+        Cocoon {
+            password,
+            rng: ThreadRng::default(),
             config: CocoonConfig::default(),
-            length: Default::default(),
         }
     }
 }
 
-impl Header {
-    const MAGIC: [u8; 3] = [0x7f, 0xc0, b'\n'];
-    const VERSION: u8 = 1;
-
-    fn serialize(&self) -> [u8; 40] {
-        let mut buf = [0u8; 40];
-        buf[..3].copy_from_slice(&self.magic);
-        buf[3] = self.version;
-        buf[4..20].copy_from_slice(&self.salt);
-        buf[20..32].copy_from_slice(&self.config.serialize());
-        buf[32..40].copy_from_slice(&self.length.to_be_bytes());
-        buf
+impl<'a> Cocoon<'a, StdRng> {
+    /// Creates a new `Cocoon` using a third party random generator.
+    ///
+    /// The method can be used when ThreadRnd is not accessible in "no std" build.
+    pub fn from_rng<R: RngCore>(password: &'a [u8], rng: R) -> Result<Self, rand::Error> {
+        Ok(Cocoon {
+            password,
+            rng: StdRng::from_rng(rng)?,
+            config: CocoonConfig::default(),
+        })
     }
 
-    fn deserialize(buf: [u8; 40]) -> Result<Header, Error> {
-        let mut this = Header::default();
-        this.magic.copy_from_slice(&buf[..3]);
-        this.version = buf[3];
-        this.salt.copy_from_slice(&buf[4..20]);
-        this.config = CocoonConfig::deserialize(&buf[20..32])?;
-        this.length = usize::from_be_bytes(buf[32..40].try_into().unwrap());
-        Ok(this)
+    /// Creates a new `Cocoon` using a `getrandom` crate (`OsRng`).
+    ///
+    /// The method can be used to create a `Cocoon` when ThreadRnd is not accessible
+    /// in "no std" build.
+    #[cfg(feature = "getrandom")]
+    pub fn from_entropy(password: &'a [u8]) -> Self {
+        Cocoon {
+            password,
+            rng: StdRng::from_entropy(),
+            config: CocoonConfig::default(),
+        }
+    }
+}
+
+impl<'a, R: CryptoRng + RngCore> Cocoon<'a, R> {
+    /// Sets encryption algorithm to wrap data on.
+    ///
+    /// # Examples
+    ///
+    /// Basic usage:
+    /// ```
+    /// let cocoon = Cocoon::new(b"password").with_cipher(CocoonCipher::Aes256Gcm);
+    /// cocoon.wrap(b"my secret data");
+    ///
+    /// let cocoon = Cocoon::new(b"password").with_cipher(CocoonCipher::Chacha20Poly1305);
+    /// cocoon.wrap(b"my secret data");
+    /// ```
+    pub fn with_cipher(mut self, cipher: CocoonCipher) -> Self {
+        self.config.cipher = cipher;
+        self
+    }
+
+    /// Wraps data into encrypted container using random nonce and a
+    /// master key derived from a password with random salt.
+    ///
+    /// Cocoon format: [header | data | tag].
+    #[cfg(feature = "alloc")]
+    pub fn wrap(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
+        // Allocation is needed because there is no way to prefix encrypted
+        // data with a header without an allocation. It means that we need
+        // to copy data at least once. It's necessary to avoid any further copying.
+        let mut container = Vec::with_capacity(HEADER_SIZE + data.len() + TAG_SIZE);
+
+        let header_offset = 0;
+        let body_offset = HEADER_SIZE;
+        let tag_offset = HEADER_SIZE + data.len();
+
+        // Encrypted data starts right after the header.
+        let body = &mut container[body_offset..tag_offset];
+        body.copy_from_slice(data);
+
+        // Encrypt in place and get other parts.
+        let parts = self.encrypt(body)?;
+
+        // Copy header before encrypted data.
+        container[header_offset..body_offset].copy_from_slice(&parts.header);
+        // Copy tag after encrypted data.
+        container[tag_offset..].copy_from_slice(&parts.tag);
+
+        Ok(container)
+    }
+
+    /// Encrypts data in place and dumps the container into the writer (file, cursor, etc).
+    #[cfg(feature = "std")]
+    pub fn dump(&mut self, mut data: Vec<u8>, mut writer: impl Write) -> Result<(), Error> {
+        let parts = self.encrypt(&mut data)?;
+
+        writer.write_all(&parts.header)?;
+        writer.write_all(&data)?;
+        writer.write_all(&parts.tag)?;
+
+        Ok(())
+    }
+
+    /// Encrypts data in place, avoiding unnecessary copying, and returns the rest
+    /// parts of the container.
+    ///
+    /// The parts (header and tag) are needed to decrypt data with `Cocoon::decrypt()`.
+    /// The method doesn't use memory allocation and is suitable for "no std" and "no alloc" build.
+    pub fn encrypt(&mut self, data: &mut [u8]) -> Result<CocoonDetachedParts, Error> {
+        let mut salt = [0u8; 16];
+        let mut nonce = [0u8; 12];
+        self.rng.fill_bytes(&mut salt);
+        self.rng.fill_bytes(&mut nonce);
+
+        let header = CocoonHeader::new(&self.config, salt, nonce, data.len() as u64).serialize();
+
+        let master_key = match self.config.kdf {
+            CocoonKdf::Pbkdf2 => {
+                kdf::pbkdf2::derive(&salt, self.password, self.config.kdf_iterations())
+            }
+        };
+
+        let nonce = GenericArray::from_slice(&nonce);
+        let master_key = GenericArray::clone_from_slice(master_key.as_ref());
+
+        let tag: [u8; 16] = match self.config.cipher {
+            CocoonCipher::Chacha20Poly1305 => {
+                let cipher = ChaCha20Poly1305::new(master_key);
+                cipher.encrypt_in_place_detached(nonce, &header, data)
+            }
+            CocoonCipher::Aes256Gcm => {
+                let cipher = Aes256Gcm::new(master_key);
+                cipher.encrypt_in_place_detached(nonce, &header, data)
+            }
+        }
+        .map_err(|_| Error::Cryptography)?
+        .into();
+
+        Ok(CocoonDetachedParts { header, tag })
+    }
+
+    /// Unwraps data from the encrypted container.
+    #[cfg(feature = "alloc")]
+    pub fn unwrap(&self, data: &[u8]) -> Result<Vec<u8>, Error> {
+        let header = CocoonHeader::deserialize(&data)?;
+        let mut body = Vec::with_capacity(header.data_length());
+
+        let mut parts = CocoonDetachedParts {
+            header: [0; HEADER_SIZE],
+            tag: [0; TAG_SIZE],
+        };
+
+        let header_offset = 0;
+        let body_offset = HEADER_SIZE;
+        let tag_offset = HEADER_SIZE + header.data_length();
+
+        parts.header.copy_from_slice(&data[..header_offset]);
+        body.copy_from_slice(&data[body_offset..tag_offset]);
+        parts.tag.copy_from_slice(&data[tag_offset..]);
+
+        self.decrypt(&mut body, parts)?;
+
+        Ok(body)
+    }
+
+    /// Parses container from the reader (file, cursor, etc.), validates format,
+    /// allocates memory and places decrypted data there.
+    #[cfg(feature = "std")]
+    pub fn parse(&self, reader: &mut impl Read) -> Result<Vec<u8>, Error> {
+        let mut parts = CocoonDetachedParts {
+            header: [0; HEADER_SIZE],
+            tag: [0; TAG_SIZE],
+        };
+
+        reader.read_exact(&mut parts.header)?;
+
+        let header = CocoonHeader::deserialize(&parts.header)?;
+        let mut body = Vec::with_capacity(header.data_length());
+
+        reader.read_exact(&mut body)?;
+        reader.read_exact(&mut parts.tag)?;
+
+        self.decrypt(&mut body, parts)?;
+
+        Ok(body)
+    }
+
+    /// Decrypts data in place using the parts returned by `encrypt` method.
+    ///
+    /// The method doesn't use memory allocation and is suitable for "no std" and "no alloc" build.
+    pub fn decrypt(&self, data: &mut [u8], parts: CocoonDetachedParts) -> Result<(), Error> {
+        let header = CocoonHeader::deserialize(&parts.header)?;
+
+        let mut salt = [0u8; 16];
+        let mut nonce = [0u8; 12];
+        salt.copy_from_slice(header.salt());
+        nonce.copy_from_slice(header.nonce());
+
+        let master_key = match header.config().kdf {
+            CocoonKdf::Pbkdf2 => {
+                kdf::pbkdf2::derive(&salt, self.password, header.config().kdf_iterations())
+            }
+        };
+
+        let nonce = GenericArray::from_slice(&nonce);
+        let master_key = GenericArray::clone_from_slice(master_key.as_ref());
+        let tag = GenericArray::from_slice(&parts.tag);
+
+        match header.config().cipher {
+            CocoonCipher::Chacha20Poly1305 => {
+                let cipher = ChaCha20Poly1305::new(master_key);
+                cipher.decrypt_in_place_detached(nonce, &parts.header, data, tag)
+            }
+            CocoonCipher::Aes256Gcm => {
+                let cipher = Aes256Gcm::new(master_key);
+                cipher.decrypt_in_place_detached(nonce, &parts.header, data, tag)
+            }
+        }
+        .map_err(|_| Error::Cryptography)?;
+
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn asdf() {
+        Cocoon::new(b"password");
     }
 }
