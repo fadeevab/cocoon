@@ -1,4 +1,15 @@
-//! A protected container to wrap sensitive data with a strong encryption and format validation.
+//! # Cocoon 🦋
+//!
+//! [`Cocoon`] is a protected container to wrap sensitive data with a strong encryption
+//! and format validation. The format of the [`Cocoon`] is developed to be used for the following
+//! practical cases:
+//!
+//! 1. As a _file format_ to organize a simple secure storage:
+//!    1. Key store.
+//!    2. Password store.
+//!    3. Sensitive data store.
+//! 2. _Encrypted data transfer_:
+//!    * As a secure in-memory container.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs, unused_qualifications)]
@@ -30,32 +41,60 @@ use std::io::{Read, Write};
 
 use header::{CocoonConfig, CocoonHeader};
 
-pub use chacha20poly1305::aead::Buffer;
 pub use error::Error;
 pub use header::{CocoonCipher, CocoonKdf};
 
-/// A header size which prefixes the encrypted data.
-const HEADER_SIZE: usize = CocoonHeader::SIZE;
-/// All currently supported AEAD algorithms declare tag size as 16 bytes.
-const TAG_SIZE: usize = 16;
+/// The header size which prefixes an encrypted data.
+pub const HEADER_SIZE: usize = CocoonHeader::SIZE;
+/// The authentication tag size. All supported AEAD algorithms declare tag size as 16 bytes.
+pub const TAG_SIZE: usize = 16;
 
-/// Detached parts contain header and tag (signature).
+/// Detached parts of the container: a header and an authentication tag.
 ///
-/// The structure is used in the `encrypt` and `decrypt` methods,
-/// and it is useful with no `std` and no `alloc` build configuration.
-pub struct CocoonDetachedParts {
+/// The structure is used in the [`Cocoon::encrypt`] and [`Cocoon::decrypt`] methods,
+/// and it is useful with "no std" and "no alloc" build configuration.
+pub struct CocoonParts {
     /// Serialized opaque header.
     ///
-    /// It is needed to derive master key from a password and decrypt data.
+    /// The header is needed to parse container and to decrypt data.
+    /// The size of the header is [`HEADER_SIZE`].
     pub header: [u8; HEADER_SIZE],
     /// Authentication tag.
     ///
-    /// It is needed to verify integrity of the whole container.
+    /// The authentication tag is needed to verify integrity of the whole container.
+    /// The size of the tag is [`TAG_SIZE`].
     pub tag: [u8; TAG_SIZE],
 }
 
-/// Cocoon is a simple encrypted container suitable
-pub struct Cocoon<'a, R: CryptoRng + RngCore> {
+/// Protects data in an encrypted container format.
+///
+/// # Basic Usage
+/// ```
+/// use cocoon::Cocoon;
+///
+/// let cocoon = Cocoon::new(b"password");
+///
+/// let wrapped = cocoon.wrap(b"my secret data")?;
+/// let unwrapped = cocoon.unwrap(&wrapped)?;
+///
+/// assert_ne(&wrapped, b"my secret_data");
+/// assert_eq(unwrapped, b"my secret_data");
+/// ```
+///
+/// # Default Configuration
+/// | Option           | Value                          |
+/// |------------------|--------------------------------|
+/// | Cipher           | Chacha20Poly1305               |
+/// | Key derivation   | PBKDF2 with 100 000 iterations |
+/// | Random generator | [ThreadRng]                    |
+///
+/// * Cipher can be customized using [`with_cipher`](Cocoon::with_cipher) method.
+/// * Key derivation (KDF): only PBKDF2 is supported.
+/// * Random generator:
+///   - [ThreadRng] in `std` build.
+///   - [StdRng] in "no std" build: use [from_rng](Cocoon::from_rng) and
+///     [from_entropy](Cocoon::from_entropy) functions.
+pub struct Cocoon<'a, R: CryptoRng + RngCore + Clone> {
     password: &'a [u8],
     rng: R,
     config: CocoonConfig,
@@ -63,7 +102,13 @@ pub struct Cocoon<'a, R: CryptoRng + RngCore> {
 
 #[cfg(feature = "std")]
 impl<'a> Cocoon<'a, ThreadRng> {
-    /// Allocates random generator and prepares configuration.
+    /// Creates a new `Cocoon` with [ThreadRng] random generator
+    /// and a default configuration:
+    ///
+    /// # Arguments
+    ///
+    /// `password` - a shared reference to a password.
+    ///
     pub fn new(password: &'a [u8]) -> Self {
         Cocoon {
             password,
@@ -74,7 +119,7 @@ impl<'a> Cocoon<'a, ThreadRng> {
 }
 
 impl<'a> Cocoon<'a, StdRng> {
-    /// Creates a new `Cocoon` using a third party random generator.
+    /// Creates a new `Cocoon` using a [third party] random generator.
     ///
     /// The method can be used when ThreadRnd is not accessible in "no std" build.
     pub fn from_rng<R: RngCore>(password: &'a [u8], rng: R) -> Result<Self, rand::Error> {
@@ -85,11 +130,11 @@ impl<'a> Cocoon<'a, StdRng> {
         })
     }
 
-    /// Creates a new `Cocoon` using a `getrandom` crate (`OsRng`).
+    #[cfg(feature = "getrandom")]
+    /// Creates a new `Cocoon` using a OS random generator from [`SeedableRng::from_entropy`].
     ///
     /// The method can be used to create a `Cocoon` when ThreadRnd is not accessible
     /// in "no std" build.
-    #[cfg(feature = "getrandom")]
     pub fn from_entropy(password: &'a [u8]) -> Self {
         Cocoon {
             password,
@@ -99,44 +144,45 @@ impl<'a> Cocoon<'a, StdRng> {
     }
 }
 
-impl<'a, R: CryptoRng + RngCore> Cocoon<'a, R> {
+impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R> {
     /// Sets encryption algorithm to wrap data on.
     ///
     /// # Examples
     ///
     /// Basic usage:
     /// ```
-    /// let cocoon = Cocoon::new(b"password").with_cipher(CocoonCipher::Aes256Gcm);
-    /// cocoon.wrap(b"my secret data");
+    /// //let cocoon = Cocoon::new(b"password").with_cipher(CocoonCipher::Aes256Gcm);
+    /// //cocoon.wrap(b"my secret data");
     ///
-    /// let cocoon = Cocoon::new(b"password").with_cipher(CocoonCipher::Chacha20Poly1305);
-    /// cocoon.wrap(b"my secret data");
+    /// //let cocoon = Cocoon::new(b"password").with_cipher(CocoonCipher::Chacha20Poly1305);
+    /// //cocoon.wrap(b"my secret data");
     /// ```
     pub fn with_cipher(mut self, cipher: CocoonCipher) -> Self {
         self.config.cipher = cipher;
         self
     }
 
-    /// Wraps data into encrypted container using random nonce and a
-    /// master key derived from a password with random salt.
+    /// Wraps data into an encrypted container.
     ///
-    /// Cocoon format: [header | data | tag].
+    /// # Format
+    ///   `[header][encrypted data][authentication tag]`
     #[cfg(feature = "alloc")]
-    pub fn wrap(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn wrap(&self, data: &[u8]) -> Result<Vec<u8>, Error> {
         // Allocation is needed because there is no way to prefix encrypted
         // data with a header without an allocation. It means that we need
         // to copy data at least once. It's necessary to avoid any further copying.
         let mut container = Vec::with_capacity(HEADER_SIZE + data.len() + TAG_SIZE);
+        container.extend_from_slice(&[0; HEADER_SIZE]);
+        container.extend_from_slice(data);
+        container.extend_from_slice(&[0; TAG_SIZE]);
 
         let header_offset = 0;
         let body_offset = HEADER_SIZE;
         let tag_offset = HEADER_SIZE + data.len();
 
-        // Encrypted data starts right after the header.
         let body = &mut container[body_offset..tag_offset];
-        body.copy_from_slice(data);
 
-        // Encrypt in place and get other parts.
+        // Encrypt in place and get other parts out.
         let parts = self.encrypt(body)?;
 
         // Copy header before encrypted data.
@@ -147,9 +193,10 @@ impl<'a, R: CryptoRng + RngCore> Cocoon<'a, R> {
         Ok(container)
     }
 
-    /// Encrypts data in place and dumps the container into the writer (file, cursor, etc).
+    /// Encrypts data in place and dumps the container into the writer ([std::fs::File],
+    /// [std::io::Cursor], etc).
     #[cfg(feature = "std")]
-    pub fn dump(&mut self, mut data: Vec<u8>, mut writer: impl Write) -> Result<(), Error> {
+    pub fn dump(&mut self, mut data: Vec<u8>, writer: &mut impl Write) -> Result<(), Error> {
         let parts = self.encrypt(&mut data)?;
 
         writer.write_all(&parts.header)?;
@@ -159,16 +206,18 @@ impl<'a, R: CryptoRng + RngCore> Cocoon<'a, R> {
         Ok(())
     }
 
-    /// Encrypts data in place, avoiding unnecessary copying, and returns the rest
-    /// parts of the container.
+    /// Encrypts data in place and returns the rest parts of the container.
     ///
-    /// The parts (header and tag) are needed to decrypt data with `Cocoon::decrypt()`.
+    /// The parts (header and tag) are needed to decrypt data with [Cocoon::decrypt].
     /// The method doesn't use memory allocation and is suitable for "no std" and "no alloc" build.
-    pub fn encrypt(&mut self, data: &mut [u8]) -> Result<CocoonDetachedParts, Error> {
+    pub fn encrypt(&self, data: &mut [u8]) -> Result<CocoonParts, Error> {
+        let mut rng = self.rng.clone();
+
         let mut salt = [0u8; 16];
         let mut nonce = [0u8; 12];
-        self.rng.fill_bytes(&mut salt);
-        self.rng.fill_bytes(&mut nonce);
+
+        rng.fill_bytes(&mut salt);
+        rng.fill_bytes(&mut nonce);
 
         let header = CocoonHeader::new(&self.config, salt, nonce, data.len() as u64).serialize();
 
@@ -194,16 +243,16 @@ impl<'a, R: CryptoRng + RngCore> Cocoon<'a, R> {
         .map_err(|_| Error::Cryptography)?
         .into();
 
-        Ok(CocoonDetachedParts { header, tag })
+        Ok(CocoonParts { header, tag })
     }
 
-    /// Unwraps data from the encrypted container.
+    /// Unwraps data from the wrapped format (see [Cocoon::wrap]).
     #[cfg(feature = "alloc")]
     pub fn unwrap(&self, data: &[u8]) -> Result<Vec<u8>, Error> {
         let header = CocoonHeader::deserialize(&data)?;
         let mut body = Vec::with_capacity(header.data_length());
 
-        let mut parts = CocoonDetachedParts {
+        let mut parts = CocoonParts {
             header: [0; HEADER_SIZE],
             tag: [0; TAG_SIZE],
         };
@@ -225,7 +274,7 @@ impl<'a, R: CryptoRng + RngCore> Cocoon<'a, R> {
     /// allocates memory and places decrypted data there.
     #[cfg(feature = "std")]
     pub fn parse(&self, reader: &mut impl Read) -> Result<Vec<u8>, Error> {
-        let mut parts = CocoonDetachedParts {
+        let mut parts = CocoonParts {
             header: [0; HEADER_SIZE],
             tag: [0; TAG_SIZE],
         };
@@ -246,7 +295,7 @@ impl<'a, R: CryptoRng + RngCore> Cocoon<'a, R> {
     /// Decrypts data in place using the parts returned by `encrypt` method.
     ///
     /// The method doesn't use memory allocation and is suitable for "no std" and "no alloc" build.
-    pub fn decrypt(&self, data: &mut [u8], parts: CocoonDetachedParts) -> Result<(), Error> {
+    pub fn decrypt(&self, data: &mut [u8], parts: CocoonParts) -> Result<(), Error> {
         let header = CocoonHeader::deserialize(&parts.header)?;
 
         let mut salt = [0u8; 16];

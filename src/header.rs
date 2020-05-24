@@ -2,8 +2,7 @@ use core::convert::TryInto;
 
 use super::error::Error;
 
-/// Supported AEAD (Authenticated Encryption with Associated Data) ciphers.
-/// Only 256-bit AEAD algorithms.
+/// Supported 256-bit AEAD ciphers (Authenticated Encryption with Associated Data).
 #[derive(Clone, Copy)]
 pub enum CocoonCipher {
     /// Chacha20-Poly1305.
@@ -12,8 +11,8 @@ pub enum CocoonCipher {
     Aes256Gcm,
 }
 
-/// Key derivation functions (KDF) which are supported to derive a master key
-/// from a user password. PBKDF2 is selected by default.
+/// Supported key derivation functions (KDF) to derive master key
+/// from user password. PBKDF2 by default.
 #[derive(Clone, Copy)]
 pub enum CocoonKdf {
     /// PBKDF2 with NIST SP 800-132 recommended parameters:
@@ -28,17 +27,17 @@ enum CocoonKdfVariant {
     Weak,
 }
 
-/// A set of `Cocoon` container capabilities. Config is embedded to a container inside the header.
+/// A set of `Cocoon` container capabilities. Config is embedded to a container in the header.
 #[derive(Clone)]
 pub struct CocoonConfig {
     /// Cipher.
     pub cipher: CocoonCipher,
-    /// Key derivation function.
+    /// Key derivation function (KDF).
     pub kdf: CocoonKdf,
-    /// Not configurable from outside of the crate field.
+    /// KDF variant. Not configurable from outside of the crate field.
     kdf_variant: CocoonKdfVariant,
-    /// Reserved. It is for explicit structure aligning for now,
-    /// and for possible format upgrade in future.
+    /// Reserved byte is for the explicit structure aligning
+    /// as well as for possible format upgrade in future.
     reserved: u8,
 }
 
@@ -122,7 +121,7 @@ impl CocoonConfig {
 /// Header of the protected container.
 ///
 /// | Field              | Length   | Value               | Notes                                  |
-/// |--------------------|----------|---------------------|----------------------------------------|
+/// |:-------------------|:---------|:--------------------|:---------------------------------------|
 /// | Magic number       |  3 Bytes | 0x7f 0xc0 '\n'      | Constant                               |
 /// | Version            |  1 Byte  | 0x01                | Version 1                              |
 /// | Options            |  4 Bytes | 0x01 0x01 0x01 0x00 | Chacha20Poly1304, PBKDF2, 100_000 iter.|
