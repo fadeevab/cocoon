@@ -1,6 +1,19 @@
+#[cfg(feature = "std")]
+use std::io::Read;
+
 use core::convert::TryInto;
 
 use super::error::Error;
+
+/// Safe deserializing from byte to enum.
+macro_rules! match_enum {
+    ($m:expr, $($variant:expr),+) => {
+        match $m {
+            $(v if v == $variant as u8 => $variant),+,
+            _ => return Err(Error::UnrecognizedFormat),
+        }
+    };
+}
 
 /// Supported 256-bit AEAD ciphers (Authenticated Encryption with Associated Data).
 #[derive(Clone, Copy)]
@@ -27,13 +40,18 @@ enum CocoonKdfVariant {
     Weak,
 }
 
+#[derive(Copy, Clone)]
+pub enum CocoonVersion {
+    Version1 = 1,
+}
+
 /// A set of `Cocoon` container capabilities. Config is embedded to a container in the header.
 #[derive(Clone)]
 pub struct CocoonConfig {
     /// Cipher.
-    pub cipher: CocoonCipher,
+    cipher: CocoonCipher,
     /// Key derivation function (KDF).
-    pub kdf: CocoonKdf,
+    kdf: CocoonKdf,
     /// KDF variant. Not configurable from outside of the crate field.
     kdf_variant: CocoonKdfVariant,
     /// Reserved byte is for the explicit structure aligning
@@ -61,7 +79,13 @@ impl Default for CocoonConfig {
 }
 
 impl CocoonConfig {
-    const SIZE: usize = 4;
+    pub fn cipher(&self) -> CocoonCipher {
+        self.cipher
+    }
+
+    pub fn kdf(&self) -> CocoonKdf {
+        self.kdf
+    }
 
     pub fn kdf_iterations(&self) -> u32 {
         match self.kdf {
@@ -78,8 +102,13 @@ impl CocoonConfig {
         }
     }
 
-    fn serialize(&self) -> [u8; Self::SIZE] {
-        let mut buf = [0u8; Self::SIZE];
+    pub fn with_cipher(mut self, cipher: CocoonCipher) -> Self {
+        self.cipher = cipher;
+        self
+    }
+
+    fn serialize(&self) -> [u8; 4] {
+        let mut buf = [0u8; 4];
         buf[0] = self.cipher as u8;
         buf[1] = self.kdf as u8;
         buf[2] = self.kdf_variant as u8;
@@ -88,26 +117,14 @@ impl CocoonConfig {
     }
 
     fn deserialize(buf: &[u8]) -> Result<Self, Error> {
-        if buf.len() < Self::SIZE {
+        if buf.len() < 4 {
             return Err(Error::UnrecognizedFormat);
         }
 
-        let cipher = match buf[0] {
-            cipher if cipher == CocoonCipher::Chacha20Poly1305 as u8 => {
-                CocoonCipher::Chacha20Poly1305
-            }
-            cipher if cipher == CocoonCipher::Aes256Gcm as u8 => CocoonCipher::Aes256Gcm,
-            _ => return Err(Error::UnrecognizedFormat),
-        };
-        let kdf = match buf[1] {
-            kdf if kdf == CocoonKdf::Pbkdf2 as u8 => CocoonKdf::Pbkdf2,
-            _ => return Err(Error::UnrecognizedFormat),
-        };
-        let kdf_variant = match buf[2] {
-            variant if variant == CocoonKdfVariant::Weak as u8 => CocoonKdfVariant::Weak,
-            variant if variant == CocoonKdfVariant::Strong as u8 => CocoonKdfVariant::Strong,
-            _ => return Err(Error::UnrecognizedFormat),
-        };
+        #[rustfmt::skip]
+        let cipher = match_enum!(buf[0], CocoonCipher::Chacha20Poly1305, CocoonCipher::Aes256Gcm);
+        let kdf = match_enum!(buf[1], CocoonKdf::Pbkdf2);
+        let kdf_variant = match_enum!(buf[2], CocoonKdfVariant::Weak, CocoonKdfVariant::Strong);
 
         Ok(CocoonConfig {
             cipher,
@@ -137,7 +154,7 @@ pub struct CocoonHeader {
     /// A version.
     ///
     /// Version is a hidden not configurable field, it allows to upgrade the format in the future.
-    version: u8,
+    version: CocoonVersion,
     /// Container settings.
     config: CocoonConfig,
     /// 16 bytes of randomly generated salt.
@@ -157,15 +174,14 @@ pub struct CocoonHeader {
 
 impl CocoonHeader {
     const MAGIC: [u8; 3] = [0x7f, 0xc0, b'\n'];
-    const VERSION: u8 = 1;
 
-    pub const SIZE: usize = 44;
+    pub const SIZE: usize = core::mem::size_of::<Self>();
 
-    pub fn new(config: &CocoonConfig, salt: [u8; 16], nonce: [u8; 12], length: u64) -> Self {
+    pub fn new(config: CocoonConfig, salt: [u8; 16], nonce: [u8; 12], length: u64) -> Self {
         CocoonHeader {
             magic: CocoonHeader::MAGIC,
-            version: CocoonHeader::VERSION,
-            config: config.clone(),
+            version: CocoonVersion::Version1,
+            config,
             salt,
             nonce,
             length,
@@ -176,8 +192,8 @@ impl CocoonHeader {
         &self.config
     }
 
-    pub fn data_length(&self) -> usize {
-        self.length as usize
+    pub fn data_length(&self) -> u64 {
+        self.length
     }
 
     pub fn salt(&self) -> &[u8] {
@@ -188,14 +204,18 @@ impl CocoonHeader {
         &self.nonce
     }
 
+    pub fn version(&self) -> CocoonVersion {
+        self.version
+    }
+
     pub fn serialize(&self) -> [u8; Self::SIZE] {
         let mut buf = [0u8; Self::SIZE];
         buf[..3].copy_from_slice(&self.magic);
-        buf[3] = self.version;
+        buf[3] = self.version as u8;
         buf[4..8].copy_from_slice(&self.config.serialize());
         buf[8..24].copy_from_slice(&self.salt);
         buf[24..36].copy_from_slice(&self.nonce);
-        buf[36..44].copy_from_slice(&self.length.to_be_bytes());
+        buf[36..Self::SIZE].copy_from_slice(&self.length.to_be_bytes());
         buf
     }
 
@@ -206,13 +226,17 @@ impl CocoonHeader {
 
         let mut magic = [0u8; 3];
         magic.copy_from_slice(&buf[..3]);
-        let version = buf[3];
+        if magic != Self::MAGIC {
+            return Err(Error::UnrecognizedFormat);
+        }
+
+        let version = match_enum!(buf[3], CocoonVersion::Version1);
         let config = CocoonConfig::deserialize(&buf[4..8])?;
         let mut salt = [0u8; 16];
         salt.copy_from_slice(&buf[8..24]);
         let mut nonce = [0u8; 12];
         nonce.copy_from_slice(&buf[24..36]);
-        let length = u64::from_be_bytes(buf[36..44].try_into().unwrap());
+        let length = u64::from_be_bytes(buf[36..Self::SIZE].try_into().unwrap());
 
         Ok(CocoonHeader {
             magic,
@@ -222,5 +246,12 @@ impl CocoonHeader {
             nonce,
             length,
         })
+    }
+
+    #[cfg(feature = "std")]
+    pub fn deserialize_from(reader: &mut impl Read) -> Result<CocoonHeader, Error> {
+        let mut buf = [0u8; Self::SIZE];
+        reader.read_exact(&mut buf)?;
+        CocoonHeader::deserialize(&buf)
     }
 }
