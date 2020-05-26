@@ -17,6 +17,7 @@ macro_rules! match_enum {
 
 /// Supported 256-bit AEAD ciphers (Authenticated Encryption with Associated Data).
 #[derive(Clone, Copy)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum CocoonCipher {
     /// Chacha20-Poly1305.
     Chacha20Poly1305 = 1,
@@ -27,6 +28,7 @@ pub enum CocoonCipher {
 /// Supported key derivation functions (KDF) to derive master key
 /// from user password. PBKDF2 by default.
 #[derive(Clone, Copy)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum CocoonKdf {
     /// PBKDF2 with NIST SP 800-132 recommended parameters:
     /// 1. Salt: 16 bytes (128-bit) + predefined salt.
@@ -35,18 +37,21 @@ pub enum CocoonKdf {
 }
 
 #[derive(Copy, Clone)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
 enum CocoonKdfVariant {
     Strong = 1,
     Weak,
 }
 
 #[derive(Copy, Clone)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum CocoonVersion {
     Version1 = 1,
 }
 
 /// A set of `Cocoon` container capabilities. Config is embedded to a container in the header.
 #[derive(Clone)]
+#[cfg_attr(test, derive(Debug, PartialEq))]
 pub struct CocoonConfig {
     /// Cipher.
     cipher: CocoonCipher,
@@ -175,7 +180,7 @@ pub struct CocoonHeader {
 impl CocoonHeader {
     const MAGIC: [u8; 3] = [0x7f, 0xc0, b'\n'];
 
-    pub const SIZE: usize = core::mem::size_of::<Self>();
+    pub const SIZE: usize = 44; // Don't use size_of::<Self>() here because of #[repr(Rust)].
 
     pub fn new(config: CocoonConfig, salt: [u8; 16], nonce: [u8; 12], length: u64) -> Self {
         CocoonHeader {
@@ -253,5 +258,99 @@ impl CocoonHeader {
         let mut buf = [0u8; Self::SIZE];
         reader.read_exact(&mut buf)?;
         CocoonHeader::deserialize(&buf)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn header_config_default() {
+        let iterations = if cfg!(feature = "debug") {
+            2000
+        } else {
+            100_000
+        };
+
+        let config = CocoonConfig::default();
+        assert_eq!(config.kdf(), CocoonKdf::Pbkdf2);
+        assert_eq!(config.cipher(), CocoonCipher::Chacha20Poly1305);
+        assert_eq!(config.kdf_iterations(), iterations);
+    }
+
+    #[test]
+    fn header_config_modify() {
+        let config = CocoonConfig::default().with_cipher(CocoonCipher::Aes256Gcm);
+        assert_eq!(config.cipher(), CocoonCipher::Aes256Gcm);
+    }
+
+    #[test]
+    fn header_config_serialize() {
+        let variant = if cfg!(feature = "debug") { 0x02 } else { 0x01 };
+
+        let config = CocoonConfig::default();
+        assert_eq!(config.serialize(), [0x01, 0x01, variant, 0x00]);
+
+        let config = config.with_cipher(CocoonCipher::Aes256Gcm);
+        assert_eq!(config.serialize(), [0x02, 0x01, variant, 0x00]);
+    }
+
+    #[test]
+    fn header_new() {
+        let header = CocoonHeader::new(CocoonConfig::default(), [0; 16], [0; 12], std::u64::MAX);
+        assert_eq!(header.config(), &CocoonConfig::default());
+        assert_eq!(header.salt(), [0; 16]);
+        assert_eq!(header.nonce(), [0; 12]);
+        assert_eq!(header.data_length(), std::u64::MAX);
+        assert_eq!(header.version(), CocoonVersion::Version1);
+    }
+
+    #[test]
+    fn header_serialize() {
+        let variant = if cfg!(feature = "debug") { 0x02 } else { 0x01 };
+
+        let header = CocoonHeader::new(
+            CocoonConfig::default().with_cipher(CocoonCipher::Aes256Gcm),
+            [1; 16],
+            [2; 12],
+            std::u64::MAX,
+        );
+
+        assert_eq!(
+            header.serialize()[..],
+            [
+                0x7f, 0xc0, b'\n', 1, 2, 1, variant, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 255, 255, 255, 255, 255, 255, 255, 255
+            ][..]
+        );
+    }
+
+    #[test]
+    fn header_deserialize() {
+        let header = CocoonHeader::new(CocoonConfig::default(), [1; 16], [2; 12], 50);
+        let header = match CocoonHeader::deserialize(&header.serialize()) {
+            Ok(h) => h,
+            Err(e) => panic!("Cannot deserialize serialized: {:?}", e),
+        };
+
+        assert_eq!(header.config(), &CocoonConfig::default());
+        assert_eq!(header.salt(), [1; 16]);
+        assert_eq!(header.nonce(), [2; 12]);
+        assert_eq!(header.data_length(), 50);
+        assert_eq!(header.version(), CocoonVersion::Version1);
+    }
+
+    #[test]
+    fn header_deserialize_from() {
+        let header = CocoonHeader::new(CocoonConfig::default(), [1; 16], [2; 12], 50).serialize();
+        let mut header = std::io::Cursor::new(&header[..]);
+        let header = CocoonHeader::deserialize_from(&mut header).expect("Deserialized header");
+
+        assert_eq!(header.config(), &CocoonConfig::default());
+        assert_eq!(header.salt(), [1; 16]);
+        assert_eq!(header.nonce(), [2; 12]);
+        assert_eq!(header.data_length(), 50);
+        assert_eq!(header.version(), CocoonVersion::Version1);
     }
 }
