@@ -1,6 +1,3 @@
-#[cfg(feature = "std")]
-use std::io::Read;
-
 use core::convert::TryInto;
 
 use super::error::Error;
@@ -209,6 +206,7 @@ impl CocoonHeader {
         &self.nonce
     }
 
+    #[cfg(test)]
     pub fn version(&self) -> CocoonVersion {
         self.version
     }
@@ -251,13 +249,6 @@ impl CocoonHeader {
             nonce,
             length,
         })
-    }
-
-    #[cfg(feature = "std")]
-    pub fn deserialize_from(reader: &mut impl Read) -> Result<CocoonHeader, Error> {
-        let mut buf = [0u8; Self::SIZE];
-        reader.read_exact(&mut buf)?;
-        CocoonHeader::deserialize(&buf)
     }
 }
 
@@ -333,19 +324,6 @@ mod test {
             Ok(h) => h,
             Err(e) => panic!("Cannot deserialize serialized: {:?}", e),
         };
-
-        assert_eq!(header.config(), &CocoonConfig::default());
-        assert_eq!(header.salt(), [1; 16]);
-        assert_eq!(header.nonce(), [2; 12]);
-        assert_eq!(header.data_length(), 50);
-        assert_eq!(header.version(), CocoonVersion::Version1);
-    }
-
-    #[test]
-    fn header_deserialize_from() {
-        let header = CocoonHeader::new(CocoonConfig::default(), [1; 16], [2; 12], 50).serialize();
-        let mut header = std::io::Cursor::new(&header[..]);
-        let header = CocoonHeader::deserialize_from(&mut header).expect("Deserialized header");
 
         assert_eq!(header.config(), &CocoonConfig::default());
         assert_eq!(header.salt(), [1; 16]);
