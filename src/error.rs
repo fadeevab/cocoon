@@ -2,6 +2,7 @@
 #[derive(Debug)]
 pub enum Error {
     /// I/o error during read/write operation (`Cocoon::dump`, `Cocoon::parse`).
+    #[cfg(feature = "std")]
     Io(std::io::Error),
     /// Format is not recognized. Probably corrupted.
     UnrecognizedFormat,
@@ -11,6 +12,7 @@ pub enum Error {
     Cryptography,
 }
 
+#[cfg(feature = "std")]
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
         Error::Io(err)
