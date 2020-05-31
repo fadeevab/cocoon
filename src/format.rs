@@ -71,6 +71,30 @@ mod test {
     use crate::{CocoonConfig, CocoonHeader};
 
     #[test]
+    fn format_prefix_good() {
+        const RANDOM_ADD: usize = 12;
+        let prefix = [1u8; FormatVersion1::size() + RANDOM_ADD];
+
+        let format = FormatPrefix::deserialize(&prefix).expect("Deserialized container's prefix");
+
+        assert_eq!(&prefix[..HEADER_SIZE], format.header());
+        assert_eq!(&prefix[HEADER_SIZE..HEADER_SIZE + TAG_SIZE], format.tag());
+    }
+
+    #[test]
+    fn format_prefix_short() {
+        let prefix = [1u8; HEADER_SIZE];
+
+        match FormatPrefix::deserialize(&prefix) {
+            Err(err) => match err {
+                Error::UnrecognizedFormat => (),
+                _ => panic!("Invalid error"),
+            },
+            Ok(_) => panic!("Cocoon prefix had not to be parsed"),
+        };
+    }
+
+    #[test]
     fn format_version1() {
         let variant = if cfg!(feature = "debug") { 0x02 } else { 0x01 };
 
