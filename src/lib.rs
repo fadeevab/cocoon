@@ -39,12 +39,16 @@ use rand::{
 use alloc::vec::Vec;
 #[cfg(feature = "std")]
 use std::io::{Read, Write};
+use std::marker::PhantomData;
 
 use format::{FormatPrefix, FormatVersion1};
 use header::{CocoonConfig, CocoonHeader};
 
 pub use error::Error;
 pub use header::{CocoonCipher, CocoonKdf};
+
+type EnableWrapMethods = u8;
+type EnableParseMethods = u16;
 
 /// Hides data into encrypted container.
 ///
@@ -74,14 +78,15 @@ pub use header::{CocoonCipher, CocoonKdf};
 ///   - [`ThreadRng`] in `std` build.
 ///   - [`StdRng`] in "no std" build: use [`from_rng`](Cocoon::from_rng) and
 ///     [`from_entropy`](Cocoon::from_entropy) functions.
-pub struct Cocoon<'a, R: CryptoRng + RngCore + Clone> {
+pub struct Cocoon<'a, R: CryptoRng + RngCore + Clone, W> {
     password: &'a [u8],
     rng: R,
     config: CocoonConfig,
+    _methods_marker: PhantomData<W>,
 }
 
 #[cfg(feature = "std")]
-impl<'a> Cocoon<'a, ThreadRng> {
+impl<'a> Cocoon<'a, ThreadRng, EnableWrapMethods> {
     /// Creates a new `Cocoon` with [`ThreadRng`] random generator
     /// and a [Default Configuration](#default-configuration).
     ///
@@ -94,11 +99,12 @@ impl<'a> Cocoon<'a, ThreadRng> {
             password,
             rng: ThreadRng::default(),
             config: CocoonConfig::default(),
+            _methods_marker: PhantomData,
         }
     }
 }
 
-impl<'a> Cocoon<'a, StdRng> {
+impl<'a> Cocoon<'a, StdRng, EnableWrapMethods> {
     /// Creates a new `Cocoon` using a standard random generator with seed.
     ///
     /// The method can be used when ThreadRnd is not accessible in "no std" build.
@@ -108,6 +114,7 @@ impl<'a> Cocoon<'a, StdRng> {
             password,
             rng: StdRng::from_seed(seed),
             config: CocoonConfig::default(),
+            _methods_marker: PhantomData,
         }
     }
 
@@ -119,6 +126,7 @@ impl<'a> Cocoon<'a, StdRng> {
             password,
             rng: StdRng::from_rng(rng)?,
             config: CocoonConfig::default(),
+            _methods_marker: PhantomData,
         })
     }
 
@@ -132,22 +140,31 @@ impl<'a> Cocoon<'a, StdRng> {
             password,
             rng: StdRng::from_entropy(),
             config: CocoonConfig::default(),
+            _methods_marker: PhantomData,
         }
     }
 }
 
-impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R> {
-    /// Creates a new `Cocoon` using a third party random generator.
+impl<'a> Cocoon<'a, NoRng, EnableParseMethods> {
+    /// Creates a [`Cocoon`] instance with no accessible creation methods like [`Cocoon::wrap()`],
+    /// [`Cocoon::dump()`] and [`Cocoon::encrypt()`].
     ///
-    /// The method can be used when ThreadRnd is not accessible in "no std" build.
-    pub fn from_crypto_rng(password: &'a [u8], rng: R) -> Self {
+    /// This is needed if you don't want to encrypt a container, and only to decrypt/parse one.
+    /// All encryption methods need a cryptographic random generator to generate salt and nonces,
+    /// and at the opposite side parsing doesn't need one, therefore `parse_only` could be suitable
+    /// in a limited embedded environment, or if need a simple approach just to unwrap a cocoon.
+    pub fn parse_only(password: &'a [u8]) -> Self {
         Cocoon {
             password,
-            rng,
+            rng: NoRng,
             config: CocoonConfig::default(),
+            _methods_marker: PhantomData,
         }
     }
+}
 
+/// Wrapping/encryption methods are accessible only when random generator is accessible.
+impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, EnableWrapMethods> {
     /// Sets encryption algorithm to wrap data on.
     ///
     /// # Examples
@@ -175,9 +192,6 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R> {
     }
 
     /// Wraps data into an encrypted container.
-    ///
-    /// # Format
-    ///   `[header][encrypted data][authentication tag]`
     #[cfg(feature = "alloc")]
     pub fn wrap(&self, data: &[u8]) -> Result<Vec<u8>, Error> {
         const PREFIX_SIZE: usize = FormatVersion1::size();
@@ -251,6 +265,19 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R> {
         .into();
 
         Ok(FormatVersion1::serialize(&header, &tag))
+    }
+}
+
+/// Parsing methods are always accessible. They don't need random generator in general.
+impl<'a, R: CryptoRng + RngCore + Clone, W> Cocoon<'a, R, W> {
+    /// Creates a new `Cocoon` using any third party random generator.
+    pub fn from_crypto_rng(password: &'a [u8], rng: R) -> Self {
+        Cocoon {
+            password,
+            rng,
+            config: CocoonConfig::default(),
+            _methods_marker: PhantomData,
+        }
     }
 
     /// Unwraps data from the wrapped format (see [`Cocoon::wrap`]).
@@ -328,6 +355,25 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R> {
     }
 }
 
+#[derive(Clone)]
+struct NoRng;
+
+impl CryptoRng for NoRng {}
+impl RngCore for NoRng {
+    fn next_u32(&mut self) -> u32 {
+        unreachable!();
+    }
+    fn next_u64(&mut self) -> u64 {
+        unreachable!();
+    }
+    fn fill_bytes(&mut self, _dest: &mut [u8]) {
+        unreachable!();
+    }
+    fn try_fill_bytes(&mut self, _dest: &mut [u8]) -> Result<(), rand::Error> {
+        unreachable!();
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -365,7 +411,7 @@ mod test {
         let mut data = [
             244, 85, 222, 144, 119, 169, 144, 11, 178, 216, 4, 57, 17, 47,
         ];
-        let cocoon = Cocoon::new(b"password");
+        let cocoon = Cocoon::parse_only(b"password");
 
         cocoon
             .decrypt(&mut data, &detached_prefix)

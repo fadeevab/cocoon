@@ -279,7 +279,7 @@ mod test {
         assert_eq!(config.serialize(), [0x02, 0x01, 0x01, 0x00]);
 
         let config = config.with_weak_kdf();
-        assert_eq!(config.serialize(), [0x01, 0x01, 0x02, 0x00]);
+        assert_eq!(config.serialize(), [0x02, 0x01, 0x02, 0x00]);
     }
 
     #[test]
