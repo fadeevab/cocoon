@@ -90,14 +90,12 @@ mod test {
                 Error::UnrecognizedFormat => (),
                 _ => panic!("Invalid error"),
             },
-            Ok(_) => panic!("Cocoon prefix had not to be parsed"),
+            Ok(_) => panic!("Cocoon prefix has not to be parsed"),
         };
     }
 
     #[test]
     fn format_version1() {
-        let variant = if cfg!(feature = "debug") { 0x02 } else { 0x01 };
-
         assert_eq!(44 + 16, FormatVersion1::size());
 
         let header = CocoonHeader::new(CocoonConfig::default(), [1; 16], [2; 12], 50).serialize();
@@ -105,7 +103,7 @@ mod test {
 
         assert_eq!(
             [
-                127, 192, 10, 1, 1, 1, variant, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                127, 192, 10, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 50, 3, 3, 3, 3, 3, 3, 3,
                 3, 3, 3, 3, 3, 3, 3, 3, 3
             ][..],

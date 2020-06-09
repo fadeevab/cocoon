@@ -29,7 +29,7 @@ pub enum CocoonCipher {
 pub enum CocoonKdf {
     /// PBKDF2 with NIST SP 800-132 recommended parameters:
     /// 1. Salt: 16 bytes (128-bit) + predefined salt.
-    /// 2. Iterations: 100 000 (1000 when "debug" feature is enabled).
+    /// 2. Iterations: 100 000 (10_000 when "weak" KDF is enabled).
     Pbkdf2 = 1,
 }
 
@@ -66,15 +66,7 @@ impl Default for CocoonConfig {
         CocoonConfig {
             cipher: CocoonCipher::Chacha20Poly1305,
             kdf: CocoonKdf::Pbkdf2,
-            kdf_variant: if cfg!(feature = "debug") {
-                // `Weak` is needed for debug purposes, because a "strong" variant
-                // generates key for a kind of 10 seconds, and more. `debug_assertions` is not
-                // used here in order to prevent unintentional container incompatibility,
-                // so `debug` feature has to be explicitly specified.
-                CocoonKdfVariant::Weak
-            } else {
-                CocoonKdfVariant::Strong
-            },
+            kdf_variant: CocoonKdfVariant::Strong,
             reserved: Default::default(),
         }
     }
@@ -93,9 +85,9 @@ impl CocoonConfig {
         match self.kdf {
             CocoonKdf::Pbkdf2 => match self.kdf_variant {
                 // 1000 is the minimum according to NIST SP 800-132, however this recommendation
-                // is 20 years old at this moment.
-                // 100_000 iterations are extremely slow in debug builds.
-                CocoonKdfVariant::Weak => 2000,
+                // is 20 years old at this moment. 100_000 iterations are extremely slow in debug
+                // builds without optimization, so 10_000 iterations could be used at least.
+                CocoonKdfVariant::Weak => 10_000,
                 // NIST SP 800-132 (PBKDF2) recommends to choose an iteration count
                 // somewhere between 1000 and 10_000_000, so the password derivation function
                 // can not be brute forced easily.
@@ -106,6 +98,11 @@ impl CocoonConfig {
 
     pub fn with_cipher(mut self, cipher: CocoonCipher) -> Self {
         self.cipher = cipher;
+        self
+    }
+
+    pub fn with_weak_kdf(mut self) -> Self {
+        self.kdf_variant = CocoonKdfVariant::Weak;
         self
     }
 
@@ -258,33 +255,31 @@ mod test {
 
     #[test]
     fn header_config_default() {
-        let iterations = if cfg!(feature = "debug") {
-            2000
-        } else {
-            100_000
-        };
-
         let config = CocoonConfig::default();
         assert_eq!(config.kdf(), CocoonKdf::Pbkdf2);
         assert_eq!(config.cipher(), CocoonCipher::Chacha20Poly1305);
-        assert_eq!(config.kdf_iterations(), iterations);
+        assert_eq!(config.kdf_iterations(), 100_000);
     }
 
     #[test]
     fn header_config_modify() {
-        let config = CocoonConfig::default().with_cipher(CocoonCipher::Aes256Gcm);
+        let config = CocoonConfig::default()
+            .with_cipher(CocoonCipher::Aes256Gcm)
+            .with_weak_kdf();
         assert_eq!(config.cipher(), CocoonCipher::Aes256Gcm);
+        assert_eq!(config.kdf_iterations(), 10_000);
     }
 
     #[test]
     fn header_config_serialize() {
-        let variant = if cfg!(feature = "debug") { 0x02 } else { 0x01 };
-
         let config = CocoonConfig::default();
-        assert_eq!(config.serialize(), [0x01, 0x01, variant, 0x00]);
+        assert_eq!(config.serialize(), [0x01, 0x01, 0x01, 0x00]);
 
         let config = config.with_cipher(CocoonCipher::Aes256Gcm);
-        assert_eq!(config.serialize(), [0x02, 0x01, variant, 0x00]);
+        assert_eq!(config.serialize(), [0x02, 0x01, 0x01, 0x00]);
+
+        let config = config.with_weak_kdf();
+        assert_eq!(config.serialize(), [0x01, 0x01, 0x02, 0x00]);
     }
 
     #[test]
@@ -299,8 +294,6 @@ mod test {
 
     #[test]
     fn header_serialize() {
-        let variant = if cfg!(feature = "debug") { 0x02 } else { 0x01 };
-
         let header = CocoonHeader::new(
             CocoonConfig::default().with_cipher(CocoonCipher::Aes256Gcm),
             [1; 16],
@@ -311,7 +304,7 @@ mod test {
         assert_eq!(
             header.serialize()[..],
             [
-                0x7f, 0xc0, b'\n', 1, 2, 1, variant, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                0x7f, 0xc0, b'\n', 1, 2, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 255, 255, 255, 255, 255, 255, 255, 255
             ][..]
         );

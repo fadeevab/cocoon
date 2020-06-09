@@ -54,11 +54,11 @@ pub use header::{CocoonCipher, CocoonKdf};
 ///
 /// let cocoon = Cocoon::new(b"password");
 ///
-/// let wrapped = cocoon.wrap(b"my secret data")?;
-/// let unwrapped = cocoon.unwrap(&wrapped)?;
+/// let wrapped = cocoon.wrap(b"my secret data").unwrap();
+/// let unwrapped = cocoon.unwrap(&wrapped).unwrap();
 ///
-/// assert_ne(&wrapped, b"my secret_data");
-/// assert_eq(unwrapped, b"my secret_data");
+/// assert_ne!(&wrapped, b"my secret_data");
+/// assert_eq!(unwrapped, b"my secret_data");
 /// ```
 ///
 /// # Default Configuration
@@ -99,7 +99,19 @@ impl<'a> Cocoon<'a, ThreadRng> {
 }
 
 impl<'a> Cocoon<'a, StdRng> {
-    /// Creates a new `Cocoon` using a [third party] random generator.
+    /// Creates a new `Cocoon` using a standard random generator with seed.
+    ///
+    /// The method can be used when ThreadRnd is not accessible in "no std" build.
+    /// **WARNING**: Use this method carefully, don't feed it with a static seed unless testing!
+    pub fn from_seed(password: &'a [u8], seed: [u8; 32]) -> Self {
+        Cocoon {
+            password,
+            rng: StdRng::from_seed(seed),
+            config: CocoonConfig::default(),
+        }
+    }
+
+    /// Creates a new `Cocoon` using a third party random generator.
     ///
     /// The method can be used when ThreadRnd is not accessible in "no std" build.
     pub fn from_rng<R: RngCore>(password: &'a [u8], rng: R) -> Result<Self, rand::Error> {
@@ -125,6 +137,17 @@ impl<'a> Cocoon<'a, StdRng> {
 }
 
 impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R> {
+    /// Creates a new `Cocoon` using a third party random generator.
+    ///
+    /// The method can be used when ThreadRnd is not accessible in "no std" build.
+    pub fn from_crypto_rng(password: &'a [u8], rng: R) -> Self {
+        Cocoon {
+            password,
+            rng,
+            config: CocoonConfig::default(),
+        }
+    }
+
     /// Sets encryption algorithm to wrap data on.
     ///
     /// # Examples
@@ -139,6 +162,15 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R> {
     /// ```
     pub fn with_cipher(mut self, cipher: CocoonCipher) -> Self {
         self.config = self.config.with_cipher(cipher);
+        self
+    }
+
+    /// Reduces a number of iterations for key derivation function (KDF).
+    ///
+    /// This modifier could be used for testing in debug mode, and should not be used
+    /// in a production and release builds.
+    pub fn with_weak_kdf(mut self) -> Self {
+        self.config = self.config.with_weak_kdf();
         self
     }
 
@@ -160,9 +192,9 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R> {
         let body = &mut container[PREFIX_SIZE..];
 
         // Encrypt in place and get a prefix part.
-        let prefix = self.encrypt(body)?;
+        let detached_prefix = self.encrypt(body)?;
 
-        container[..PREFIX_SIZE].copy_from_slice(&prefix);
+        container[..PREFIX_SIZE].copy_from_slice(&detached_prefix);
 
         Ok(container)
     }
@@ -171,9 +203,9 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R> {
     /// [`std::io::Cursor`], etc).
     #[cfg(feature = "std")]
     pub fn dump(&mut self, mut data: Vec<u8>, writer: &mut impl Write) -> Result<(), Error> {
-        let format_prefix = self.encrypt(&mut data)?;
+        let detached_prefix = self.encrypt(&mut data)?;
 
-        writer.write_all(&format_prefix)?;
+        writer.write_all(&detached_prefix)?;
         writer.write_all(&data)?;
 
         Ok(())
@@ -224,11 +256,11 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R> {
     /// Unwraps data from the wrapped format (see [`Cocoon::wrap`]).
     #[cfg(feature = "alloc")]
     pub fn unwrap(&self, container: &[u8]) -> Result<Vec<u8>, Error> {
-        let format = FormatPrefix::deserialize(&container)?;
-        let header = CocoonHeader::deserialize(format.header())?;
+        let prefix = FormatPrefix::deserialize(&container)?;
+        let header = CocoonHeader::deserialize(prefix.header())?;
         let mut body = Vec::with_capacity(header.data_length() as usize);
 
-        self.decrypt_parsed(&mut body, &format, &header)?;
+        self.decrypt_parsed(&mut body, &prefix, &header)?;
 
         Ok(body)
     }
@@ -237,13 +269,13 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R> {
     /// allocates memory and places decrypted data there.
     #[cfg(feature = "std")]
     pub fn parse(&self, reader: &mut impl Read) -> Result<Vec<u8>, Error> {
-        let format = FormatPrefix::deserialize_from(reader)?;
-        let header = CocoonHeader::deserialize(format.header())?;
+        let prefix = FormatPrefix::deserialize_from(reader)?;
+        let header = CocoonHeader::deserialize(prefix.header())?;
         let mut body = Vec::with_capacity(header.data_length() as usize);
 
         reader.read_exact(&mut body)?;
 
-        self.decrypt_parsed(&mut body, &format, &header)?;
+        self.decrypt_parsed(&mut body, &prefix, &header)?;
 
         Ok(body)
     }
@@ -252,10 +284,10 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R> {
     ///
     /// The method doesn't use memory allocation and is suitable for "no std" and "no alloc" build.
     pub fn decrypt(&self, data: &mut [u8], prefix: &[u8]) -> Result<(), Error> {
-        let format = FormatPrefix::deserialize(prefix)?;
-        let header = CocoonHeader::deserialize(format.header())?;
+        let prefix = FormatPrefix::deserialize(prefix)?;
+        let header = CocoonHeader::deserialize(prefix.header())?;
 
-        self.decrypt_parsed(data, &format, &header)
+        self.decrypt_parsed(data, &prefix, &header)
     }
 
     fn decrypt_parsed(
@@ -271,11 +303,9 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R> {
         nonce.copy_from_slice(header.nonce());
 
         let master_key = match header.config().kdf() {
-            CocoonKdf::Pbkdf2 => kdf::pbkdf2::derive(
-                &salt,
-                self.password,
-                header.config().kdf_iterations(),
-            ),
+            CocoonKdf::Pbkdf2 => {
+                kdf::pbkdf2::derive(&salt, self.password, header.config().kdf_iterations())
+            }
         };
 
         let nonce = GenericArray::from_slice(&nonce);
@@ -303,7 +333,44 @@ mod test {
     use super::*;
 
     #[test]
-    fn asdf() {
-        Cocoon::new(b"password");
+    fn cocoon_encrypt() {
+        let cocoon = Cocoon::from_seed(b"password", [0; 32]).with_weak_kdf();
+        let mut data = "my secret data".to_owned().into_bytes();
+
+        let detached_prefix = cocoon.encrypt(&mut data).unwrap();
+
+        assert_eq!(
+            &[
+                127, 192, 10, 1, 1, 1, 2, 0, 118, 184, 224, 173, 160, 241, 61, 144, 64, 93, 106,
+                229, 83, 134, 189, 40, 189, 210, 25, 184, 160, 141, 237, 26, 168, 54, 239, 204, 0,
+                0, 0, 0, 0, 0, 0, 14, 245, 24, 39, 167, 173, 32, 174, 247, 250, 85, 17, 250, 119,
+                96, 187, 207
+            ][..],
+            &detached_prefix[..]
+        );
+
+        assert_eq!(
+            &[168, 128, 133, 25, 121, 30, 206, 73, 191, 115, 252, 164, 158, 240],
+            &data[..]
+        );
+    }
+
+    #[test]
+    fn cocoon_decrypt() {
+        let detached_prefix = [
+            127, 192, 10, 1, 1, 1, 1, 0, 118, 184, 224, 173, 160, 241, 61, 144, 64, 93, 106, 229,
+            83, 134, 189, 40, 189, 210, 25, 184, 160, 141, 237, 26, 168, 54, 239, 204, 0, 0, 0, 0,
+            0, 0, 0, 14, 53, 9, 86, 247, 53, 186, 123, 217, 156, 132, 173, 200, 208, 134, 179, 12,
+        ];
+        let mut data = [
+            244, 85, 222, 144, 119, 169, 144, 11, 178, 216, 4, 57, 17, 47,
+        ];
+        let cocoon = Cocoon::new(b"password");
+
+        cocoon
+            .decrypt(&mut data, &detached_prefix)
+            .expect("Decrypted data");
+
+        assert_eq!(b"my secret data", &data);
     }
 }
