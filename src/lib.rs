@@ -47,8 +47,8 @@ use header::{CocoonConfig, CocoonHeader};
 pub use error::Error;
 pub use header::{CocoonCipher, CocoonKdf};
 
-type EnableWrapMethods = u8;
-type EnableParseMethods = u16;
+type EncryptionMethods = u8;
+type DecryptionMethods = u16;
 
 /// Hides data into encrypted container.
 ///
@@ -78,15 +78,15 @@ type EnableParseMethods = u16;
 ///   - [`ThreadRng`] in `std` build.
 ///   - [`StdRng`] in "no std" build: use [`from_rng`](Cocoon::from_rng) and
 ///     [`from_entropy`](Cocoon::from_entropy) functions.
-pub struct Cocoon<'a, R: CryptoRng + RngCore + Clone, W> {
+pub struct Cocoon<'a, R: CryptoRng + RngCore + Clone, M> {
     password: &'a [u8],
     rng: R,
     config: CocoonConfig,
-    _methods_marker: PhantomData<W>,
+    _methods_marker: PhantomData<M>,
 }
 
 #[cfg(feature = "std")]
-impl<'a> Cocoon<'a, ThreadRng, EnableWrapMethods> {
+impl<'a> Cocoon<'a, ThreadRng, EncryptionMethods> {
     /// Creates a new `Cocoon` with [`ThreadRng`] random generator
     /// and a [Default Configuration](#default-configuration).
     ///
@@ -104,7 +104,7 @@ impl<'a> Cocoon<'a, ThreadRng, EnableWrapMethods> {
     }
 }
 
-impl<'a> Cocoon<'a, StdRng, EnableWrapMethods> {
+impl<'a> Cocoon<'a, StdRng, EncryptionMethods> {
     /// Creates a new `Cocoon` using a standard random generator with seed.
     ///
     /// The method can be used when ThreadRnd is not accessible in "no std" build.
@@ -145,7 +145,7 @@ impl<'a> Cocoon<'a, StdRng, EnableWrapMethods> {
     }
 }
 
-impl<'a> Cocoon<'a, NoRng, EnableParseMethods> {
+impl<'a> Cocoon<'a, NoRng, DecryptionMethods> {
     /// Creates a [`Cocoon`] instance with no accessible creation methods like [`Cocoon::wrap()`],
     /// [`Cocoon::dump()`] and [`Cocoon::encrypt()`].
     ///
@@ -164,7 +164,7 @@ impl<'a> Cocoon<'a, NoRng, EnableParseMethods> {
 }
 
 /// Wrapping/encryption methods are accessible only when random generator is accessible.
-impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, EnableWrapMethods> {
+impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, EncryptionMethods> {
     /// Sets encryption algorithm to wrap data on.
     ///
     /// # Examples
@@ -269,7 +269,7 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, EnableWrapMethods> {
 }
 
 /// Parsing methods are always accessible. They don't need random generator in general.
-impl<'a, R: CryptoRng + RngCore + Clone, W> Cocoon<'a, R, W> {
+impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
     /// Creates a new `Cocoon` using any third party random generator.
     pub fn from_crypto_rng(password: &'a [u8], rng: R) -> Self {
         Cocoon {
