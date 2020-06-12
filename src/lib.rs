@@ -130,7 +130,7 @@ impl<'a> Cocoon<'a, StdRng, EncryptionMethods> {
         })
     }
 
-    #[cfg(feature = "getrandom")]
+    #[cfg(any(feature = "getrandom", test))]
     /// Creates a new `Cocoon` using OS random generator from [`SeedableRng::from_entropy`].
     ///
     /// The method can be used to create a `Cocoon` when [`ThreadRng`] is not accessible
@@ -157,6 +157,18 @@ impl<'a> Cocoon<'a, NoRng, DecryptionMethods> {
         Cocoon {
             password,
             rng: NoRng,
+            config: CocoonConfig::default(),
+            _methods_marker: PhantomData,
+        }
+    }
+}
+
+impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, EncryptionMethods> {
+    /// Creates a new `Cocoon` using any third party random generator.
+    pub fn from_crypto_rng(password: &'a [u8], rng: R) -> Self {
+        Cocoon {
+            password,
+            rng,
             config: CocoonConfig::default(),
             _methods_marker: PhantomData,
         }
@@ -270,22 +282,19 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, EncryptionMethods> {
 
 /// Parsing methods are always accessible. They don't need random generator in general.
 impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
-    /// Creates a new `Cocoon` using any third party random generator.
-    pub fn from_crypto_rng(password: &'a [u8], rng: R) -> Self {
-        Cocoon {
-            password,
-            rng,
-            config: CocoonConfig::default(),
-            _methods_marker: PhantomData,
-        }
-    }
-
     /// Unwraps data from the wrapped format (see [`Cocoon::wrap`]).
     #[cfg(feature = "alloc")]
     pub fn unwrap(&self, container: &[u8]) -> Result<Vec<u8>, Error> {
-        let prefix = FormatPrefix::deserialize(&container)?;
+        let prefix = FormatPrefix::deserialize(container)?;
         let header = CocoonHeader::deserialize(prefix.header())?;
+
+        // For graceful exit without a panic.
+        if header.data_length() >= container.len() as u64 {
+            return Err(Error::UnrecognizedFormat);
+        }
+
         let mut body = Vec::with_capacity(header.data_length() as usize);
+        body.extend_from_slice(&container[container.len() - header.data_length() as usize..]);
 
         self.decrypt_parsed(&mut body, &prefix, &header)?;
 
@@ -379,6 +388,16 @@ mod test {
     use super::*;
 
     #[test]
+    fn cocoon_create() {
+        Cocoon::new(b"password").with_cipher(CocoonCipher::Aes256Gcm);
+        Cocoon::from_seed(b"another password", [0; 32]).with_weak_kdf();
+        Cocoon::from_entropy(b"new password");
+        Cocoon::from_rng(b"password", rand::thread_rng()).unwrap();
+        Cocoon::from_crypto_rng(b"password", NoRng);
+        Cocoon::parse_only(b"password");
+    }
+
+    #[test]
     fn cocoon_encrypt() {
         let cocoon = Cocoon::from_seed(b"password", [0; 32]).with_weak_kdf();
         let mut data = "my secret data".to_owned().into_bytes();
@@ -418,5 +437,22 @@ mod test {
             .expect("Decrypted data");
 
         assert_eq!(b"my secret data", &data);
+    }
+
+    #[test]
+    fn cocoon_wrap() {
+        let cocoon = Cocoon::from_seed(b"password", [0; 32]);
+        let wrapped = cocoon.wrap(b"data").expect("Wrapped container");
+
+        assert_eq!(wrapped[wrapped.len() - 4..], [253, 77, 138, 130]);
+    }
+
+    #[test]
+    fn cocoon_wrap_unwrap() {
+        let cocoon = Cocoon::from_seed(b"password", [0; 32]);
+        let wrapped = cocoon.wrap(b"data").expect("Wrapped container");
+        let original = cocoon.unwrap(&wrapped).expect("Unwrapped container");
+
+        assert_eq!(original, b"data");
     }
 }
