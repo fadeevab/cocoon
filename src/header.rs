@@ -203,20 +203,26 @@ impl CocoonHeader {
         &self.nonce
     }
 
-    #[cfg(test)]
     pub fn version(&self) -> CocoonVersion {
         self.version
     }
 
+    #[cfg(test)]
     pub fn serialize(&self) -> [u8; Self::SIZE] {
         let mut buf = [0u8; Self::SIZE];
+        self.serialize_into(&mut buf);
+        buf
+    }
+
+    pub fn serialize_into(&self, buf: &mut [u8]) {
+        debug_assert!(buf.len() >= Self::SIZE);
+
         buf[..3].copy_from_slice(&self.magic);
         buf[3] = self.version as u8;
         buf[4..8].copy_from_slice(&self.config.serialize());
         buf[8..24].copy_from_slice(&self.salt);
         buf[24..36].copy_from_slice(&self.nonce);
         buf[36..Self::SIZE].copy_from_slice(&self.length.to_be_bytes());
-        buf
     }
 
     pub fn deserialize(buf: &[u8]) -> Result<CocoonHeader, Error> {
@@ -304,8 +310,8 @@ mod test {
         assert_eq!(
             header.serialize()[..],
             [
-                0x7f, 0xc0, b'\n', 1, 2, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 255, 255, 255, 255, 255, 255, 255, 255
+                0x7f, 0xc0, b'\n', 1, 2, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+                2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 255, 255, 255, 255, 255, 255, 255, 255
             ][..]
         );
     }

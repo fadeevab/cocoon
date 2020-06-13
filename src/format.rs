@@ -1,66 +1,94 @@
 #[cfg(feature = "std")]
 use std::io::Read;
 
-use super::error::Error;
+use super::{
+    error::Error,
+    header::{CocoonHeader, CocoonVersion},
+};
 
-const HEADER_SIZE: usize = super::header::CocoonHeader::SIZE;
+const HEADER_SIZE: usize = CocoonHeader::SIZE;
 const TAG_SIZE: usize = 16;
+const MAX_SIZE: usize = HEADER_SIZE + TAG_SIZE;
 
 pub struct FormatPrefix {
-    header: [u8; HEADER_SIZE],
-    tag: [u8; TAG_SIZE],
+    header: CocoonHeader,
+    raw: [u8; MAX_SIZE],
 }
 
-impl<'a> FormatPrefix {
-    pub fn deserialize(start: &[u8]) -> Result<Self, Error> {
-        if start.len() < HEADER_SIZE + TAG_SIZE {
-            return Err(Error::UnrecognizedFormat);
+impl FormatPrefix {
+    pub const SERIALIZE_SIZE: usize = MAX_SIZE;
+
+    // The idea is that having additional extensions we shell put them in the constructor.
+    // Meanwhile `tag` will be calculated later and it appears right on serialization.
+    // Also parameters are moved into the object to evade additional copying.
+    pub fn new(header: CocoonHeader) -> Self {
+        let mut raw = [0u8; MAX_SIZE];
+
+        match header.version() {
+            CocoonVersion::Version1 => {
+                header.serialize_into(&mut raw);
+            }
         };
 
-        let mut header = [0u8; HEADER_SIZE];
-        let mut tag = [0u8; TAG_SIZE];
+        FormatPrefix { header, raw }
+    }
 
-        header.copy_from_slice(&start[..HEADER_SIZE]);
-        tag.copy_from_slice(&start[HEADER_SIZE..HEADER_SIZE + TAG_SIZE]);
+    pub fn serialize(mut self, tag: &[u8; TAG_SIZE]) -> [u8; Self::SERIALIZE_SIZE] {
+        match self.header().version() {
+            CocoonVersion::Version1 => (),
+            // _ => panic!("Prefix can be serialized into the latest version only!"),
+        }
 
-        Ok(FormatPrefix { header, tag })
+        self.raw[HEADER_SIZE..HEADER_SIZE + TAG_SIZE].copy_from_slice(tag);
+        self.raw
+    }
+
+    pub fn deserialize(start: &[u8]) -> Result<Self, Error> {
+        let header = CocoonHeader::deserialize(&start)?;
+
+        let mut raw = [0u8; MAX_SIZE];
+
+        match header.version() {
+            CocoonVersion::Version1 => {
+                if start.len() < HEADER_SIZE + TAG_SIZE {
+                    return Err(Error::UnrecognizedFormat);
+                }
+
+                raw[..HEADER_SIZE].copy_from_slice(&start[..HEADER_SIZE]);
+                raw[HEADER_SIZE..HEADER_SIZE + TAG_SIZE]
+                    .copy_from_slice(&start[HEADER_SIZE..HEADER_SIZE + TAG_SIZE]);
+            }
+        }
+
+        Ok(FormatPrefix { header, raw })
     }
 
     #[cfg(feature = "std")]
     pub fn deserialize_from(reader: &mut impl Read) -> Result<Self, Error> {
-        let mut header = [0u8; HEADER_SIZE];
-        let mut tag = [0u8; TAG_SIZE];
+        let mut raw = [0u8; MAX_SIZE];
 
-        reader.read_exact(&mut header)?;
-        reader.read_exact(&mut tag)?;
+        reader.read_exact(&mut raw[..HEADER_SIZE])?;
+        let header = CocoonHeader::deserialize(&raw)?;
 
-        Ok(FormatPrefix { header, tag })
+        match header.version() {
+            CocoonVersion::Version1 => {
+                reader.read_exact(&mut raw[HEADER_SIZE..HEADER_SIZE + TAG_SIZE])?;
+            }
+        }
+
+        Ok(FormatPrefix { header, raw })
     }
 
-    pub fn header(&self) -> &[u8] {
+    pub fn header(&self) -> &CocoonHeader {
         &self.header
     }
 
+    pub fn prefix(&self) -> &[u8] {
+        &self.raw[..HEADER_SIZE]
+    }
+
     pub fn tag(&self) -> &[u8] {
-        &self.tag
-    }
-}
-
-pub struct FormatVersion1;
-
-impl FormatVersion1 {
-    pub const fn size() -> usize {
-        HEADER_SIZE + TAG_SIZE
-    }
-
-    pub fn serialize(
-        header: &[u8; HEADER_SIZE],
-        tag: &[u8; TAG_SIZE],
-    ) -> [u8; HEADER_SIZE + TAG_SIZE] {
-        let mut prefix = [0u8; HEADER_SIZE + TAG_SIZE];
-        prefix[..HEADER_SIZE].copy_from_slice(header);
-        prefix[HEADER_SIZE..HEADER_SIZE + TAG_SIZE].copy_from_slice(tag);
-        prefix
+        &self.raw[HEADER_SIZE..HEADER_SIZE + TAG_SIZE]
     }
 }
 
@@ -73,17 +101,19 @@ mod test {
     #[test]
     fn format_prefix_good() {
         const RANDOM_ADD: usize = 12;
-        let prefix = [1u8; FormatVersion1::size() + RANDOM_ADD];
+        let mut raw = [1u8; FormatPrefix::SERIALIZE_SIZE + RANDOM_ADD];
 
-        let format = FormatPrefix::deserialize(&prefix).expect("Deserialized container's prefix");
+        CocoonHeader::new(CocoonConfig::default(), [0; 16], [0; 12], 0).serialize_into(&mut raw);
 
-        assert_eq!(&prefix[..HEADER_SIZE], format.header());
-        assert_eq!(&prefix[HEADER_SIZE..HEADER_SIZE + TAG_SIZE], format.tag());
+        let prefix = FormatPrefix::deserialize(&raw).expect("Deserialized container's prefix");
+
+        assert_eq!(&raw[..HEADER_SIZE], prefix.prefix());
+        assert_eq!(&raw[HEADER_SIZE..HEADER_SIZE + TAG_SIZE], prefix.tag());
     }
 
     #[test]
     fn format_prefix_short() {
-        let prefix = [1u8; HEADER_SIZE];
+        let prefix = [1u8; MAX_SIZE];
 
         match FormatPrefix::deserialize(&prefix) {
             Err(err) => match err {
@@ -96,18 +126,19 @@ mod test {
 
     #[test]
     fn format_version1() {
-        assert_eq!(44 + 16, FormatVersion1::size());
+        assert_eq!(44 + 16, FormatPrefix::SERIALIZE_SIZE);
 
-        let header = CocoonHeader::new(CocoonConfig::default(), [1; 16], [2; 12], 50).serialize();
+        let header = CocoonHeader::new(CocoonConfig::default(), [1; 16], [2; 12], 50);
+        let prefix = FormatPrefix::new(header);
         let tag = [3; 16];
 
         assert_eq!(
             [
-                127, 192, 10, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-                2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 50, 3, 3, 3, 3, 3, 3, 3,
-                3, 3, 3, 3, 3, 3, 3, 3, 3
+                127, 192, 10, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,
+                2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 50, 3, 3, 3, 3, 3, 3, 3, 3, 3,
+                3, 3, 3, 3, 3, 3, 3
             ][..],
-            FormatVersion1::serialize(&header, &tag)[..]
+            prefix.serialize(&tag)[..]
         );
     }
 }

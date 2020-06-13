@@ -41,7 +41,7 @@ use alloc::vec::Vec;
 use std::io::{Read, Write};
 use std::marker::PhantomData;
 
-use format::{FormatPrefix, FormatVersion1};
+use format::FormatPrefix;
 use header::{CocoonConfig, CocoonHeader};
 
 pub use error::Error;
@@ -50,19 +50,26 @@ pub use header::{CocoonCipher, CocoonKdf};
 type EncryptionMethods = u8;
 type DecryptionMethods = u16;
 
-/// Hides data into encrypted container.
+/// The size of the cocoon prefix which appears in detached form in [`Cocoon::encrypt`].
+pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
+
+/// Protects data inside of encrypted container.
 ///
 /// # Basic Usage
 /// ```
-/// use cocoon::Cocoon;
+/// # use cocoon::{Cocoon, Error};
+/// #
+/// # fn main() -> Result<(), Error> {
+/// # let cocoon = Cocoon::new(b"password");
+/// #
+/// let wrapped = cocoon.wrap(b"my secret data")?;
+/// assert_ne!(&wrapped, b"my secret data");
 ///
-/// let cocoon = Cocoon::new(b"password");
+/// let unwrapped = cocoon.unwrap(&wrapped)?;
+/// assert_eq!(unwrapped, b"my secret data");
 ///
-/// let wrapped = cocoon.wrap(b"my secret data").unwrap();
-/// let unwrapped = cocoon.unwrap(&wrapped).unwrap();
-///
-/// assert_ne!(&wrapped, b"my secret_data");
-/// assert_eq!(unwrapped, b"my secret_data");
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// # Default Configuration
@@ -77,7 +84,7 @@ type DecryptionMethods = u16;
 /// * Random generator:
 ///   - [`ThreadRng`] in `std` build.
 ///   - [`StdRng`] in "no std" build: use [`from_rng`](Cocoon::from_rng) and
-///     [`from_entropy`](Cocoon::from_entropy) functions.
+///   - [`from_entropy`](Cocoon::from_entropy) functions.
 pub struct Cocoon<'a, R: CryptoRng + RngCore + Clone, M> {
     password: &'a [u8],
     rng: R,
@@ -206,8 +213,6 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, EncryptionMethods> {
     /// Wraps data into an encrypted container.
     #[cfg(feature = "alloc")]
     pub fn wrap(&self, data: &[u8]) -> Result<Vec<u8>, Error> {
-        const PREFIX_SIZE: usize = FormatVersion1::size();
-
         // Allocation is needed because there is no way to prefix encrypted
         // data with a header without an allocation. It means that we need
         // to copy data at least once. It's necessary to avoid any further copying.
@@ -242,7 +247,7 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, EncryptionMethods> {
     /// The prefix is needed to decrypt data with [`Cocoon::decrypt`].
     /// This method doesn't use memory allocation and it is suitable with no [`std`]
     /// and no [`alloc`] build.
-    pub fn encrypt(&self, data: &mut [u8]) -> Result<[u8; FormatVersion1::size()], Error> {
+    pub fn encrypt(&self, data: &mut [u8]) -> Result<[u8; PREFIX_SIZE], Error> {
         let mut rng = self.rng.clone();
 
         let mut salt = [0u8; 16];
@@ -251,8 +256,8 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, EncryptionMethods> {
         rng.fill_bytes(&mut salt);
         rng.fill_bytes(&mut nonce);
 
-        let header =
-            CocoonHeader::new(self.config.clone(), salt, nonce, data.len() as u64).serialize();
+        let header = CocoonHeader::new(self.config.clone(), salt, nonce, data.len() as u64);
+        let prefix = FormatPrefix::new(header);
 
         let master_key = match self.config.kdf() {
             CocoonKdf::Pbkdf2 => {
@@ -266,17 +271,17 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, EncryptionMethods> {
         let tag: [u8; 16] = match self.config.cipher() {
             CocoonCipher::Chacha20Poly1305 => {
                 let cipher = ChaCha20Poly1305::new(master_key);
-                cipher.encrypt_in_place_detached(nonce, &header, data)
+                cipher.encrypt_in_place_detached(nonce, &prefix.prefix(), data)
             }
             CocoonCipher::Aes256Gcm => {
                 let cipher = Aes256Gcm::new(master_key);
-                cipher.encrypt_in_place_detached(nonce, &header, data)
+                cipher.encrypt_in_place_detached(nonce, &prefix.prefix(), data)
             }
         }
         .map_err(|_| Error::Cryptography)?
         .into();
 
-        Ok(FormatVersion1::serialize(&header, &tag))
+        Ok(prefix.serialize(&tag))
     }
 }
 
@@ -286,7 +291,7 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
     #[cfg(feature = "alloc")]
     pub fn unwrap(&self, container: &[u8]) -> Result<Vec<u8>, Error> {
         let prefix = FormatPrefix::deserialize(container)?;
-        let header = CocoonHeader::deserialize(prefix.header())?;
+        let header = prefix.header();
 
         // For graceful exit without a panic.
         if header.data_length() >= container.len() as u64 {
@@ -296,7 +301,7 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
         let mut body = Vec::with_capacity(header.data_length() as usize);
         body.extend_from_slice(&container[container.len() - header.data_length() as usize..]);
 
-        self.decrypt_parsed(&mut body, &prefix, &header)?;
+        self.decrypt_parsed(&mut body, &prefix)?;
 
         Ok(body)
     }
@@ -306,12 +311,11 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
     #[cfg(feature = "std")]
     pub fn parse(&self, reader: &mut impl Read) -> Result<Vec<u8>, Error> {
         let prefix = FormatPrefix::deserialize_from(reader)?;
-        let header = CocoonHeader::deserialize(prefix.header())?;
-        let mut body = Vec::with_capacity(header.data_length() as usize);
+        let mut body = Vec::with_capacity(prefix.header().data_length() as usize);
 
         reader.read_exact(&mut body)?;
 
-        self.decrypt_parsed(&mut body, &prefix, &header)?;
+        self.decrypt_parsed(&mut body, &prefix)?;
 
         Ok(body)
     }
@@ -321,19 +325,15 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
     /// The method doesn't use memory allocation and is suitable for "no std" and "no alloc" build.
     pub fn decrypt(&self, data: &mut [u8], prefix: &[u8]) -> Result<(), Error> {
         let prefix = FormatPrefix::deserialize(prefix)?;
-        let header = CocoonHeader::deserialize(prefix.header())?;
 
-        self.decrypt_parsed(data, &prefix, &header)
+        self.decrypt_parsed(data, &prefix)
     }
 
-    fn decrypt_parsed(
-        &self,
-        data: &mut [u8],
-        format: &FormatPrefix,
-        header: &CocoonHeader,
-    ) -> Result<(), Error> {
+    fn decrypt_parsed(&self, data: &mut [u8], prefix: &FormatPrefix) -> Result<(), Error> {
         let mut salt = [0u8; 16];
         let mut nonce = [0u8; 12];
+
+        let header = prefix.header();
 
         salt.copy_from_slice(header.salt());
         nonce.copy_from_slice(header.nonce());
@@ -346,16 +346,16 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
 
         let nonce = GenericArray::from_slice(&nonce);
         let master_key = GenericArray::clone_from_slice(master_key.as_ref());
-        let tag = GenericArray::from_slice(&format.tag());
+        let tag = GenericArray::from_slice(&prefix.tag());
 
         match header.config().cipher() {
             CocoonCipher::Chacha20Poly1305 => {
                 let cipher = ChaCha20Poly1305::new(master_key);
-                cipher.decrypt_in_place_detached(nonce, &format.header(), data, tag)
+                cipher.decrypt_in_place_detached(nonce, &prefix.prefix(), data, tag)
             }
             CocoonCipher::Aes256Gcm => {
                 let cipher = Aes256Gcm::new(master_key);
-                cipher.decrypt_in_place_detached(nonce, &format.header(), data, tag)
+                cipher.decrypt_in_place_detached(nonce, &prefix.prefix(), data, tag)
             }
         }
         .map_err(|_| Error::Cryptography)?;
