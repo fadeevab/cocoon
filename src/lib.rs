@@ -60,8 +60,8 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 /// # use cocoon::{Cocoon, Error};
 /// #
 /// # fn main() -> Result<(), Error> {
-/// # let cocoon = Cocoon::new(b"password");
-/// #
+/// let cocoon = Cocoon::new(b"password");
+///
 /// let wrapped = cocoon.wrap(b"my secret data")?;
 /// assert_ne!(&wrapped, b"my secret data");
 ///
