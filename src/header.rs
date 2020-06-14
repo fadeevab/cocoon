@@ -165,10 +165,10 @@ pub struct CocoonHeader {
     ///
     /// A nonce is used to seed AEAD ciphers and to encrypt data. Nonce is not a secret value.
     nonce: [u8; 12],
-    /// 8 bytes of data length.
+    /// 8 bytes of data length at most.
     ///
     /// 64-bit of length allows to handle up to 256GB of Chacha20/AES256 cipher data.
-    length: u64,
+    length: usize,
 }
 
 impl CocoonHeader {
@@ -176,7 +176,7 @@ impl CocoonHeader {
 
     pub const SIZE: usize = 44; // Don't use size_of::<Self>() here because of #[repr(Rust)].
 
-    pub fn new(config: CocoonConfig, salt: [u8; 16], nonce: [u8; 12], length: u64) -> Self {
+    pub fn new(config: CocoonConfig, salt: [u8; 16], nonce: [u8; 12], length: usize) -> Self {
         CocoonHeader {
             magic: CocoonHeader::MAGIC,
             version: CocoonVersion::Version1,
@@ -191,7 +191,7 @@ impl CocoonHeader {
         &self.config
     }
 
-    pub fn data_length(&self) -> u64 {
+    pub fn data_length(&self) -> usize {
         self.length
     }
 
@@ -242,7 +242,11 @@ impl CocoonHeader {
         salt.copy_from_slice(&buf[8..24]);
         let mut nonce = [0u8; 12];
         nonce.copy_from_slice(&buf[24..36]);
-        let length = u64::from_be_bytes(buf[36..Self::SIZE].try_into().unwrap());
+        let length = usize::from_be_bytes(
+            buf[36..Self::SIZE]
+                .try_into()
+                .map_err(|_| Error::TooLarge)?,
+        );
 
         Ok(CocoonHeader {
             magic,
@@ -290,11 +294,11 @@ mod test {
 
     #[test]
     fn header_new() {
-        let header = CocoonHeader::new(CocoonConfig::default(), [0; 16], [0; 12], std::u64::MAX);
+        let header = CocoonHeader::new(CocoonConfig::default(), [0; 16], [0; 12], std::usize::MAX);
         assert_eq!(header.config(), &CocoonConfig::default());
         assert_eq!(header.salt(), [0; 16]);
         assert_eq!(header.nonce(), [0; 12]);
-        assert_eq!(header.data_length(), std::u64::MAX);
+        assert_eq!(header.data_length(), std::usize::MAX);
         assert_eq!(header.version(), CocoonVersion::Version1);
     }
 
@@ -304,7 +308,7 @@ mod test {
             CocoonConfig::default().with_cipher(CocoonCipher::Aes256Gcm),
             [1; 16],
             [2; 12],
-            std::u64::MAX,
+            std::usize::MAX,
         );
 
         assert_eq!(

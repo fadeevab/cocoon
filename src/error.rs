@@ -10,6 +10,9 @@ pub enum Error {
     /// 1. Integrity is compromised.
     /// 2. Password is invalid.
     Cryptography,
+    /// Container is too large to get processed on the current architecture.
+    /// E.g. it's not possible to process a container larger than 4 GB on 32-bit architecture.
+    TooLarge,
 }
 
 #[cfg(feature = "std")]

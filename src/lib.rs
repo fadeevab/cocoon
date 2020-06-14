@@ -37,9 +37,9 @@ use rand::{
 
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
+use core::marker::PhantomData;
 #[cfg(feature = "std")]
 use std::io::{Read, Write};
-use std::marker::PhantomData;
 
 use format::FormatPrefix;
 use header::{CocoonConfig, CocoonHeader};
@@ -256,7 +256,7 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, EncryptionMethods> {
         rng.fill_bytes(&mut salt);
         rng.fill_bytes(&mut nonce);
 
-        let header = CocoonHeader::new(self.config.clone(), salt, nonce, data.len() as u64);
+        let header = CocoonHeader::new(self.config.clone(), salt, nonce, data.len());
         let prefix = FormatPrefix::new(header);
 
         let master_key = match self.config.kdf() {
@@ -294,11 +294,11 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
         let header = prefix.header();
 
         // For graceful exit without a panic.
-        if header.data_length() >= container.len() as u64 {
+        if header.data_length() >= container.len() {
             return Err(Error::UnrecognizedFormat);
         }
 
-        let mut body = Vec::with_capacity(header.data_length() as usize);
+        let mut body = Vec::with_capacity(header.data_length());
         body.extend_from_slice(&container[container.len() - header.data_length() as usize..]);
 
         self.decrypt_parsed(&mut body, &prefix)?;
