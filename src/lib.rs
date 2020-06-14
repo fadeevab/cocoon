@@ -293,13 +293,12 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
         let prefix = FormatPrefix::deserialize(container)?;
         let header = prefix.header();
 
-        // For graceful exit without a panic.
-        if header.data_length() >= container.len() {
-            return Err(Error::UnrecognizedFormat);
+        if container.len() < prefix.size() + header.data_length() {
+            return Err(Error::TooShort);
         }
 
         let mut body = Vec::with_capacity(header.data_length());
-        body.extend_from_slice(&container[container.len() - header.data_length() as usize..]);
+        body.extend_from_slice(&container[prefix.size()..prefix.size() + body.capacity()]);
 
         self.decrypt_parsed(&mut body, &prefix)?;
 
@@ -311,8 +310,9 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
     #[cfg(feature = "std")]
     pub fn parse(&self, reader: &mut impl Read) -> Result<Vec<u8>, Error> {
         let prefix = FormatPrefix::deserialize_from(reader)?;
-        let mut body = Vec::with_capacity(prefix.header().data_length() as usize);
+        let mut body = Vec::with_capacity(prefix.header().data_length());
 
+        // Too short error can be thrown right from here.
         reader.read_exact(&mut body)?;
 
         self.decrypt_parsed(&mut body, &prefix)?;
@@ -334,6 +334,12 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
         let mut nonce = [0u8; 12];
 
         let header = prefix.header();
+
+        if data.len() < header.data_length() {
+            return Err(Error::TooShort);
+        }
+
+        let data = &mut data[..header.data_length()];
 
         salt.copy_from_slice(header.salt());
         nonce.copy_from_slice(header.nonce());
@@ -454,5 +460,60 @@ mod test {
         let original = cocoon.unwrap(&wrapped).expect("Unwrapped container");
 
         assert_eq!(original, b"data");
+    }
+
+    #[test]
+    fn cocoon_wrap_unwrap_corrupted() {
+        let cocoon = Cocoon::from_seed(b"password", [0; 32]);
+        let mut wrapped = cocoon.wrap(b"data").expect("Wrapped container");
+
+        let last = wrapped.len() - 1;
+        wrapped[last] = wrapped[last] + 1;
+        cocoon.unwrap(&wrapped).expect_err("Unwrapped container");
+    }
+
+    #[test]
+    fn cocoon_unwrap_larger_is_ok() {
+        let cocoon = Cocoon::from_seed(b"password", [0; 32]);
+        let mut wrapped = cocoon.wrap(b"data").expect("Wrapped container");
+
+        wrapped.push(0);
+        let original = cocoon.unwrap(&wrapped).expect("Unwrapped container");
+
+        assert_eq!(original, b"data");
+    }
+
+    #[test]
+    fn cocoon_unwrap_too_short() {
+        let cocoon = Cocoon::from_seed(b"password", [0; 32]);
+        let mut wrapped = cocoon.wrap(b"data").expect("Wrapped container");
+
+        wrapped.pop();
+        cocoon
+            .unwrap(&wrapped)
+            .expect_err("Too short");
+    }
+
+    #[test]
+    fn cocoon_decrypt_wrong_sizes() {
+        let detached_prefix = [
+            127, 192, 10, 1, 1, 1, 1, 0, 118, 184, 224, 173, 160, 241, 61, 144, 64, 93, 106, 229,
+            83, 134, 189, 40, 189, 210, 25, 184, 160, 141, 237, 26, 168, 54, 239, 204, 0, 0, 0, 0,
+            0, 0, 0, 14, 53, 9, 86, 247, 53, 186, 123, 217, 156, 132, 173, 200, 208, 134, 179, 12,
+        ];
+        let mut data = [
+            244, 85, 222, 144, 119, 169, 144, 11, 178, 216, 4, 57, 17, 47, 0,
+        ];
+        let cocoon = Cocoon::parse_only(b"password");
+
+        cocoon
+            .decrypt(&mut data, &detached_prefix)
+            .expect("Decrypted data");
+
+        assert_eq!(b"my secret data\0", &data);
+
+        cocoon
+            .decrypt(&mut data[..4], &detached_prefix)
+            .expect_err("Too short");
     }
 }

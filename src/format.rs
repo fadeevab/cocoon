@@ -13,6 +13,7 @@ const MAX_SIZE: usize = HEADER_SIZE + TAG_SIZE;
 pub struct FormatPrefix {
     header: CocoonHeader,
     raw: [u8; MAX_SIZE],
+    size: usize,
 }
 
 impl FormatPrefix {
@@ -23,14 +24,16 @@ impl FormatPrefix {
     // Also parameters are moved into the object to evade additional copying.
     pub fn new(header: CocoonHeader) -> Self {
         let mut raw = [0u8; MAX_SIZE];
+        let size;
 
         match header.version() {
             CocoonVersion::Version1 => {
                 header.serialize_into(&mut raw);
+                size = HEADER_SIZE + TAG_SIZE;
             }
         };
 
-        FormatPrefix { header, raw }
+        FormatPrefix { header, raw, size }
     }
 
     pub fn serialize(mut self, tag: &[u8; TAG_SIZE]) -> [u8; Self::SERIALIZE_SIZE] {
@@ -47,6 +50,7 @@ impl FormatPrefix {
         let header = CocoonHeader::deserialize(&start)?;
 
         let mut raw = [0u8; MAX_SIZE];
+        let size: usize;
 
         match header.version() {
             CocoonVersion::Version1 => {
@@ -57,15 +61,18 @@ impl FormatPrefix {
                 raw[..HEADER_SIZE].copy_from_slice(&start[..HEADER_SIZE]);
                 raw[HEADER_SIZE..HEADER_SIZE + TAG_SIZE]
                     .copy_from_slice(&start[HEADER_SIZE..HEADER_SIZE + TAG_SIZE]);
+
+                size = HEADER_SIZE + TAG_SIZE;
             }
         }
 
-        Ok(FormatPrefix { header, raw })
+        Ok(FormatPrefix { header, raw, size })
     }
 
     #[cfg(feature = "std")]
     pub fn deserialize_from(reader: &mut impl Read) -> Result<Self, Error> {
         let mut raw = [0u8; MAX_SIZE];
+        let size: usize;
 
         reader.read_exact(&mut raw[..HEADER_SIZE])?;
         let header = CocoonHeader::deserialize(&raw)?;
@@ -73,10 +80,11 @@ impl FormatPrefix {
         match header.version() {
             CocoonVersion::Version1 => {
                 reader.read_exact(&mut raw[HEADER_SIZE..HEADER_SIZE + TAG_SIZE])?;
+                size = HEADER_SIZE + TAG_SIZE;
             }
         }
 
-        Ok(FormatPrefix { header, raw })
+        Ok(FormatPrefix { header, raw, size })
     }
 
     pub fn header(&self) -> &CocoonHeader {
@@ -89,6 +97,10 @@ impl FormatPrefix {
 
     pub fn tag(&self) -> &[u8] {
         &self.raw[HEADER_SIZE..HEADER_SIZE + TAG_SIZE]
+    }
+
+    pub fn size(&self) -> usize {
+        self.size
     }
 }
 
@@ -109,6 +121,7 @@ mod test {
 
         assert_eq!(&raw[..HEADER_SIZE], prefix.prefix());
         assert_eq!(&raw[HEADER_SIZE..HEADER_SIZE + TAG_SIZE], prefix.tag());
+        assert_eq!(prefix.size(), FormatPrefix::SERIALIZE_SIZE);
     }
 
     #[test]

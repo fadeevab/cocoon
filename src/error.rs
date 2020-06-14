@@ -13,13 +13,16 @@ pub enum Error {
     /// Container is too large to get processed on the current architecture.
     /// E.g. it's not possible to process a container larger than 4 GB on 32-bit architecture.
     TooLarge,
+    /// Buffer is too short and barely holds all data to decrypt, inconsistent length
+    /// encoded to the header.
+    TooShort,
 }
 
 #[cfg(feature = "std")]
 impl From<std::io::Error> for Error {
     fn from(err: std::io::Error) -> Self {
         match err.kind() {
-            std::io::ErrorKind::UnexpectedEof => Error::UnrecognizedFormat,
+            std::io::ErrorKind::UnexpectedEof => Error::TooShort,
             _ => Error::Io(err),
         }
     }
