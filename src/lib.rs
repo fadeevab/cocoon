@@ -53,9 +53,11 @@ type DecryptionMethods = u16;
 /// The size of the cocoon prefix which appears in detached form in [`Cocoon::encrypt`].
 pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 
-/// Protects data inside of encrypted container.
+/// Stores data securely inside of encrypted container.
 ///
 /// # Basic Usage
+/// ### Wrap a cocoon
+/// One party stores a private data into container.
 /// ```
 /// # use cocoon::{Cocoon, Error};
 /// #
@@ -65,6 +67,22 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 /// let wrapped = cocoon.wrap(b"my secret data")?;
 /// assert_ne!(&wrapped, b"my secret data");
 ///
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ### Unwrap the cocoon
+/// Another party (or the same one, or whoever knows the password) loads a private data
+/// from the container.
+/// ```
+/// # use cocoon::{Cocoon, Error};
+/// #
+/// # fn main() -> Result<(), Error> {
+/// let cocoon = Cocoon::new(b"password");
+///
+/// # let wrapped = cocoon.wrap(b"my secret data")?;
+/// # assert_ne!(&wrapped, b"my secret data");
+/// #
 /// let unwrapped = cocoon.unwrap(&wrapped)?;
 /// assert_eq!(unwrapped, b"my secret data");
 ///
