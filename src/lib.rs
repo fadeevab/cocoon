@@ -1,7 +1,7 @@
 //! # Cocoon 🦋
 //!
 //! [`Cocoon`] is a protected container to wrap sensitive data with a strong encryption
-//! and format validation. The format of the [`Cocoon`] is developed to be used for the following
+//! and format validation. A format of the [`Cocoon`] is developed for the following
 //! practical cases:
 //!
 //! 1. As a _file format_ to organize a simple secure storage:
@@ -14,6 +14,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs, unused_qualifications)]
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(docs_rs, feature(doc_cfg))]
 
 mod error;
 mod format;
@@ -47,8 +48,8 @@ use header::{CocoonConfig, CocoonHeader};
 pub use error::Error;
 pub use header::{CocoonCipher, CocoonKdf};
 
-type EncryptionMethods = u8;
-type DecryptionMethods = u16;
+struct Creation;
+struct Parsing;
 
 /// The size of the cocoon prefix which appears in detached form in [`Cocoon::encrypt`].
 pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
@@ -57,7 +58,7 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 ///
 /// # Basic Usage
 /// ### Wrap a cocoon
-/// One party stores a private data into container.
+/// One party stores a private data into a container.
 /// ```
 /// # use cocoon::{Cocoon, Error};
 /// #
@@ -111,13 +112,12 @@ pub struct Cocoon<'a, R: CryptoRng + RngCore + Clone, M> {
 }
 
 #[cfg(feature = "std")]
-impl<'a> Cocoon<'a, ThreadRng, EncryptionMethods> {
-    /// Creates a new `Cocoon` with [`ThreadRng`] random generator
+#[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
+impl<'a> Cocoon<'a, ThreadRng, Creation> {
+    /// Creates a new `Cocoon` with [`ThreadRng`] random generator under the hood
     /// and a [Default Configuration](#default-configuration).
     ///
-    /// # Arguments
-    ///
-    /// `password` - a shared reference to a password.
+    /// * `password` - a shared reference to a password.
     ///
     pub fn new(password: &'a [u8]) -> Self {
         Cocoon {
@@ -129,10 +129,11 @@ impl<'a> Cocoon<'a, ThreadRng, EncryptionMethods> {
     }
 }
 
-impl<'a> Cocoon<'a, StdRng, EncryptionMethods> {
-    /// Creates a new `Cocoon` using a standard random generator with seed.
+impl<'a> Cocoon<'a, StdRng, Creation> {
+    /// Creates a new `Cocoon` with a seeded random generator.
     ///
-    /// The method can be used when ThreadRnd is not accessible in "no std" build.
+    /// This method can be used when [`ThreadRng`] is not accessible in "no [`std`]" build.
+    ///
     /// **WARNING**: Use this method carefully, don't feed it with a static seed unless testing!
     pub fn from_seed(password: &'a [u8], seed: [u8; 32]) -> Self {
         Cocoon {
@@ -143,9 +144,9 @@ impl<'a> Cocoon<'a, StdRng, EncryptionMethods> {
         }
     }
 
-    /// Creates a new `Cocoon` using a third party random generator.
+    /// Creates a new `Cocoon` applying a third party random generator.
     ///
-    /// The method can be used when ThreadRnd is not accessible in "no std" build.
+    /// This method can be used when [`ThreadRng`] is not accessible in "no [`std`]" build.
     pub fn from_rng<R: RngCore>(password: &'a [u8], rng: R) -> Result<Self, rand::Error> {
         Ok(Cocoon {
             password,
@@ -155,11 +156,12 @@ impl<'a> Cocoon<'a, StdRng, EncryptionMethods> {
         })
     }
 
-    #[cfg(any(feature = "getrandom", test))]
-    /// Creates a new `Cocoon` using OS random generator from [`SeedableRng::from_entropy`].
+    /// Creates a new `Cocoon` with OS random generator from [`SeedableRng::from_entropy`].
     ///
     /// The method can be used to create a `Cocoon` when [`ThreadRng`] is not accessible
-    /// in "no std" build.
+    /// in "no [`std`]" build.
+    #[cfg(any(feature = "getrandom", test))]
+    #[cfg_attr(docs_rs, doc(cfg(feature = "getrandom")))]
     pub fn from_entropy(password: &'a [u8]) -> Self {
         Cocoon {
             password,
@@ -170,14 +172,14 @@ impl<'a> Cocoon<'a, StdRng, EncryptionMethods> {
     }
 }
 
-impl<'a> Cocoon<'a, NoRng, DecryptionMethods> {
-    /// Creates a [`Cocoon`] instance with no accessible creation methods like [`Cocoon::wrap()`],
-    /// [`Cocoon::dump()`] and [`Cocoon::encrypt()`].
+impl<'a> Cocoon<'a, NoRng, Parsing> {
+    /// Creates a [`Cocoon`] instance with no accessible creation methods like [`Cocoon::wrap`],
+    /// [`Cocoon::dump`] and [`Cocoon::encrypt`].
     ///
-    /// This is needed if you don't want to encrypt a container, and only to decrypt/parse one.
-    /// All encryption methods need a cryptographic random generator to generate salt and nonces,
-    /// and at the opposite side parsing doesn't need one, therefore `parse_only` could be suitable
-    /// in a limited embedded environment, or if need a simple approach just to unwrap a cocoon.
+    /// This method is needed if you don't need to encrypt a container, and to only decrypt one.
+    /// All encryption methods need a cryptographic random generator to generate a salt and nonces,
+    /// and parsing gets the from the container, therefore [`Cocoon::parse_only`] can be suitable
+    /// to simply unwrap a cocoon, and it works in a limited embedded environment.
     pub fn parse_only(password: &'a [u8]) -> Self {
         Cocoon {
             password,
@@ -188,7 +190,7 @@ impl<'a> Cocoon<'a, NoRng, DecryptionMethods> {
     }
 }
 
-impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, EncryptionMethods> {
+impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
     /// Creates a new `Cocoon` using any third party random generator.
     pub fn from_crypto_rng(password: &'a [u8], rng: R) -> Self {
         Cocoon {
@@ -200,9 +202,9 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, EncryptionMethods> {
     }
 }
 
-/// Wrapping/encryption methods are accessible only when random generator is accessible.
-impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, EncryptionMethods> {
-    /// Sets encryption algorithm to wrap data on.
+// Wrapping/encryption methods are accessible only when random generator is accessible.
+impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
+    /// Sets an encryption algorithm to wrap data on.
     ///
     /// # Examples
     ///

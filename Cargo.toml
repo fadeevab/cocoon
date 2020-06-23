@@ -22,6 +22,7 @@ sha2 = { version = "0.8.1", default-features = false }
 zeroize = { version = "1.1.0", default-features = false }
 
 [features]
+# Enables `std` feature by default.
 default = ["std"]
 
 # Enables all features, including support of simplified Cocoon API, using `rand::thread_rng`,
@@ -44,3 +45,4 @@ opt-level = 3
 
 [package.metadata.docs.rs]
 all-features = true
+rustdoc-args = ["--cfg", "docs_rs"]
