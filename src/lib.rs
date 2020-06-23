@@ -111,22 +111,54 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 ///
 /// # Encrypt/Decrypt
 ///
-/// # Features and API
-/// | API / Feature            | `std` | `alloc` | "no_std" |
-/// |--------------------------|:-----:|:-------:|:--------:|
-/// | [`Cocoon::new`]          | ✔️    | ❌      | ❌      |
-/// | [`Cocoon::from_seed`]    | ✔️    | ✔️      | ✔️      |
-/// | [`Cocoon::from_rng`]     | ✔️    | ✔️      | ✔️      |
-/// | [`Cocoon::from_entropy`] | ✔️[^1]| ✔️[^1]  | ✔️[^1]  |
-/// | [`Cocoon::parse_only`]   | ✔️    | ✔️      | ✔️      |
-/// | [`Cocoon::encrypt`]      | ✔️    | ✔️      | ✔️      |
-/// | [`Cocoon::decrypt`]      | ✔️    | ✔️      | ✔️      |
-/// | [`Cocoon::wrap`]         | ✔️    | ✔️      | ❌      |
-/// | [`Cocoon::unwrap`]       | ✔️    | ✔️      | ❌      |
-/// | [`Cocoon::dump`]         | ✔️    | ❌      | ❌      |
-/// | [`Cocoon::parse`]        | ✔️    | ❌      | ❌      |
+/// # Features
 ///
-/// [^1]: [`Cocoon::from_entropy`] is enabled when `getrandom` feature enabled.
+/// You can customize the package compilation with the following feature set:
+///
+/// | Feature      | Description                                                                  |
+/// |--------------|------------------------------------------------------------------------------|
+/// | `std`        | Enables almost all API, including I/O, excluding `getrandom` feature.        |
+/// | `alloc`      | Enables API with memory allocation, but without [`std`] dependency.          |
+/// | `getrandom`  | Enables [`Cocoon::from_entropy`].                                            |
+/// |  no features | Creation and decryption a cocoon on the stack with no thread RNG, I/O, heap. |
+///
+/// `std` is enabled by default, so you can just link the `cocoon` to you project:
+/// ```toml
+/// [dependencies]
+/// cocoon = "0"
+/// ```
+/// To use no features:
+/// ```toml
+/// [dependencies]
+/// cocoon = { version = "0", default-features = false }
+/// ```
+/// To use only `alloc` feature:
+/// ```toml
+/// [dependencies]
+/// cocoon = { version = "0", default-features = false, features = ['alloc'] }
+/// ```
+/// # Features and Methods Mapping
+///
+/// _Note: The following is not a complete set of the API. Please, refer a current
+/// documentation below to familiarize with the full set of methods._
+///
+/// | Method ↓ / Feature →        | `std` | `alloc` | "no_std" |
+/// |-----------------------------|:-----:|:-------:|:--------:|
+/// | [`Cocoon::new`]             | ✔️    | ❌      | ❌      |
+/// | [`Cocoon::from_seed`]       | ✔️    | ✔️      | ✔️      |
+/// | [`Cocoon::from_crypto_rng`] | ✔️    | ✔️      | ✔️      |
+/// | [`Cocoon::from_entropy`]    | ✔️[^1]| ✔️[^1]  | ✔️[^1]  |
+/// | [`Cocoon::parse_only`][^2]  | ✔️    | ✔️      | ✔️      |
+/// | [`Cocoon::encrypt`]         | ✔️    | ✔️      | ✔️      |
+/// | [`Cocoon::decrypt`][^2]     | ✔️    | ✔️      | ✔️      |
+/// | [`Cocoon::wrap`]            | ✔️    | ✔️      | ❌      |
+/// | [`Cocoon::unwrap`][^2]      | ✔️    | ✔️      | ❌      |
+/// | [`Cocoon::dump`]            | ✔️    | ❌      | ❌      |
+/// | [`Cocoon::parse`][^2]       | ✔️    | ❌      | ❌      |
+///
+/// [^1]: [`from_entropy`](Cocoon:from_entropy) is enabled when `getrandom` feature is enabled.
+///
+/// [^2]: [`parse_only`](Cocoon::parse_only) makes decryption API accessible only.
 pub struct Cocoon<'a, R: CryptoRng + RngCore + Clone, M> {
     password: &'a [u8],
     rng: R,
