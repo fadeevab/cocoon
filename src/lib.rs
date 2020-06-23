@@ -48,8 +48,13 @@ use header::{CocoonConfig, CocoonHeader};
 pub use error::Error;
 pub use header::{CocoonCipher, CocoonKdf};
 
-struct Creation;
-struct Parsing;
+/// Grouping creation methods via generics.
+#[doc(hidden)]
+pub struct Creation;
+
+/// Grouping parsing methods via generics.
+#[doc(hidden)]
+pub struct Parsing;
 
 /// The size of the cocoon prefix which appears in detached form in [`Cocoon::encrypt`].
 pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
@@ -57,13 +62,16 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 /// Stores data securely inside of encrypted container.
 ///
 /// # Basic Usage
+///
 /// ### Wrap a cocoon
 /// One party stores a private data into a container.
+///
 /// ```
 /// # use cocoon::{Cocoon, Error};
 /// #
 /// # fn main() -> Result<(), Error> {
 /// let cocoon = Cocoon::new(b"password");
+/// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
 ///
 /// let wrapped = cocoon.wrap(b"my secret data")?;
 /// assert_ne!(&wrapped, b"my secret data");
@@ -80,6 +88,7 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 /// #
 /// # fn main() -> Result<(), Error> {
 /// let cocoon = Cocoon::new(b"password");
+/// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
 ///
 /// # let wrapped = cocoon.wrap(b"my secret data")?;
 /// # assert_ne!(&wrapped, b"my secret data");
@@ -91,7 +100,77 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 /// # }
 /// ```
 ///
-/// # Default Configuration
+/// # Wrap/Unwrap
+/// ```
+/// # use cocoon::{Cocoon, Error};
+/// #
+/// # fn main() -> Result<(), Error> {
+/// let cocoon = Cocoon::new(b"password");
+/// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+///
+/// let wrapped = cocoon.wrap(b"my secret data")?;
+/// assert_ne!(&wrapped, b"my secret data");
+///
+/// let unwrapped = cocoon.unwrap(&wrapped)?;
+/// assert_eq!(unwrapped, b"my secret data");
+///
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Dump/Parse
+/// ```
+/// # use cocoon::{Cocoon, Error};
+/// # use std::io::Cursor;
+/// #
+/// # fn main() -> Result<(), Error> {
+/// let mut data: Vec<u8> = "my secret data".as_bytes().to_vec();
+///
+/// // Open a writable file.
+/// let mut file = Cursor::new(vec![0; 150]);
+///
+/// let mut cocoon = Cocoon::new(b"password");
+/// # let mut cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+///
+/// // Store a sensitive data into the file using encrypted format.
+/// cocoon.dump(data, &mut file)?;
+/// assert_ne!(file.get_ref(), b"my secret data");
+///
+/// // Re-open the file.
+/// file.set_position(0);
+///
+/// // Parse the file retrieving the securely stored data.
+/// let data = cocoon.parse(&mut file)?;
+/// assert_eq!(&data, b"my secret data");
+///
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Encrypt/Decrypt
+/// ```
+/// # use cocoon::{Cocoon, Error};
+/// #
+/// # fn main() -> Result<(), Error> {
+/// # // Using [`ThreadRng`] in a sake of example, though it's supposed to be any third-party
+/// # // non-standard crypto RNG.
+/// # let mut good_rng = rand::rngs::ThreadRng::default();
+/// let mut data = "my secret data".to_owned().into_bytes();
+///
+/// let cocoon = Cocoon::from_crypto_rng(b"password", good_rng);
+/// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+///
+/// let detached_prefix = cocoon.encrypt(&mut data)?;
+/// assert_ne!(data, b"my secret data");
+///
+/// cocoon.decrypt(&mut data, &detached_prefix)?;
+/// assert_eq!(data, b"my secret data");
+///
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Default Cryptography Configuration
 /// | Option           | Value                          |
 /// |------------------|--------------------------------|
 /// | Cipher           | Chacha20Poly1305               |
@@ -102,14 +181,8 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 /// * Key derivation (KDF): only PBKDF2 is supported.
 /// * Random generator:
 ///   - [`ThreadRng`] in `std` build.
-///   - [`StdRng`] in "no std" build: use [`from_rng`](Cocoon::from_rng) and
+///   - [`StdRng`] in "no std" build: use [`from_rng`](Cocoon::from_rng) and other `from_*` methods.
 ///   - [`from_entropy`](Cocoon::from_entropy) functions.
-///
-/// # Wrap/Unwrap
-///
-/// # Dump/Parse
-///
-/// # Encrypt/Decrypt
 ///
 /// # Features
 ///
@@ -139,8 +212,8 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 /// ```
 /// # Features and Methods Mapping
 ///
-/// _Note: The following is not a complete set of the API. Please, refer a current
-/// documentation below to familiarize with the full set of methods._
+/// _Note: This is not a complete list of API methods. Please, refer to the current
+/// documentation below to get familiarized with the full set of the methods._
 ///
 /// | Method ↓ / Feature →        | `std` | `alloc` | "no_std" |
 /// |-----------------------------|:-----:|:-------:|:--------:|
@@ -306,8 +379,10 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
         Ok(container)
     }
 
-    /// Encrypts data in place and dumps the container into the writer ([`std::fs::File`],
-    /// [`std::io::Cursor`], etc).
+    /// Encrypts data in place, taking ownership over the buffer, and dumps the container
+    /// into [`File`](std::fs::File), [`Cursor`](std::io::Cursor), or any other writer.
+    /// * `data` - sensitive data to be encrypted in place.
+    /// * `writer` - [`File`](std::fs::File), [`Cursor`](`std::io::Cursor`), or any other output.
     #[cfg(feature = "std")]
     #[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
     pub fn dump(&mut self, mut data: Vec<u8>, writer: &mut impl Write) -> Result<(), Error> {
@@ -390,6 +465,7 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
     pub fn parse(&self, reader: &mut impl Read) -> Result<Vec<u8>, Error> {
         let prefix = FormatPrefix::deserialize_from(reader)?;
         let mut body = Vec::with_capacity(prefix.header().data_length());
+        body.resize(body.capacity(), 0);
 
         // Too short error can be thrown right from here.
         reader.read_exact(&mut body)?;
@@ -568,9 +644,7 @@ mod test {
         let mut wrapped = cocoon.wrap(b"data").expect("Wrapped container");
 
         wrapped.pop();
-        cocoon
-            .unwrap(&wrapped)
-            .expect_err("Too short");
+        cocoon.unwrap(&wrapped).expect_err("Too short");
     }
 
     #[test]
