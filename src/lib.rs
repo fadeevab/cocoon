@@ -104,6 +104,29 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 ///   - [`ThreadRng`] in `std` build.
 ///   - [`StdRng`] in "no std" build: use [`from_rng`](Cocoon::from_rng) and
 ///   - [`from_entropy`](Cocoon::from_entropy) functions.
+///
+/// # Wrap/Unwrap
+///
+/// # Dump/Parse
+///
+/// # Encrypt/Decrypt
+///
+/// # Features and API
+/// | API / Feature            | `std` | `alloc` | "no_std" |
+/// |--------------------------|:-----:|:-------:|:--------:|
+/// | [`Cocoon::new`]          | ✔️    | ❌      | ❌      |
+/// | [`Cocoon::from_seed`]    | ✔️    | ✔️      | ✔️      |
+/// | [`Cocoon::from_rng`]     | ✔️    | ✔️      | ✔️      |
+/// | [`Cocoon::from_entropy`] | ✔️[^1]| ✔️[^1]  | ✔️[^1]  |
+/// | [`Cocoon::parse_only`]   | ✔️    | ✔️      | ✔️      |
+/// | [`Cocoon::encrypt`]      | ✔️    | ✔️      | ✔️      |
+/// | [`Cocoon::decrypt`]      | ✔️    | ✔️      | ✔️      |
+/// | [`Cocoon::wrap`]         | ✔️    | ✔️      | ❌      |
+/// | [`Cocoon::unwrap`]       | ✔️    | ✔️      | ❌      |
+/// | [`Cocoon::dump`]         | ✔️    | ❌      | ❌      |
+/// | [`Cocoon::parse`]        | ✔️    | ❌      | ❌      |
+///
+/// [^1]: [`Cocoon::from_entropy`] is enabled when `getrandom` feature enabled.
 pub struct Cocoon<'a, R: CryptoRng + RngCore + Clone, M> {
     password: &'a [u8],
     rng: R,
@@ -232,6 +255,7 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
 
     /// Wraps data into an encrypted container.
     #[cfg(feature = "alloc")]
+    #[cfg_attr(docs_rs, doc(cfg(any(feature = "alloc", feature = "std"))))]
     pub fn wrap(&self, data: &[u8]) -> Result<Vec<u8>, Error> {
         // Allocation is needed because there is no way to prefix encrypted
         // data with a header without an allocation. It means that we need
@@ -253,6 +277,7 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
     /// Encrypts data in place and dumps the container into the writer ([`std::fs::File`],
     /// [`std::io::Cursor`], etc).
     #[cfg(feature = "std")]
+    #[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
     pub fn dump(&mut self, mut data: Vec<u8>, writer: &mut impl Write) -> Result<(), Error> {
         let detached_prefix = self.encrypt(&mut data)?;
 
@@ -309,6 +334,7 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
 impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
     /// Unwraps data from the wrapped format (see [`Cocoon::wrap`]).
     #[cfg(feature = "alloc")]
+    #[cfg_attr(docs_rs, doc(cfg(any(feature = "alloc", feature = "std"))))]
     pub fn unwrap(&self, container: &[u8]) -> Result<Vec<u8>, Error> {
         let prefix = FormatPrefix::deserialize(container)?;
         let header = prefix.header();
@@ -328,6 +354,7 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
     /// Parses container from the reader (file, cursor, etc.), validates format,
     /// allocates memory and places decrypted data there.
     #[cfg(feature = "std")]
+    #[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
     pub fn parse(&self, reader: &mut impl Read) -> Result<Vec<u8>, Error> {
         let prefix = FormatPrefix::deserialize_from(reader)?;
         let mut body = Vec::with_capacity(prefix.header().data_length());
