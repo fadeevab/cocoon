@@ -11,6 +11,10 @@
 //! 2. For _encrypted data transfer_:
 //!    * As a secure in-memory container.
 //!
+//! # Format
+//!
+//! <img src="../../../images/cocoon_format.svg" />
+//!
 //! # Basic Usage
 //!
 //! ### Wrap a cocoon
@@ -49,10 +53,6 @@
 //! # Ok(())
 //! # }
 //! ```
-//!
-//! # Format
-//!
-//! <img src="../../../images/cocoon_format.svg" />
 //!
 //! # Wrap/Unwrap
 //! ```
