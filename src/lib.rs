@@ -617,6 +617,8 @@ impl RngCore for NoRng {
 
 #[cfg(test)]
 mod test {
+    use std::io::Cursor;
+
     use super::*;
 
     #[test]
@@ -739,5 +741,24 @@ mod test {
         cocoon
             .decrypt(&mut data[..4], &detached_prefix)
             .expect_err("Too short");
+    }
+
+    #[test]
+    fn cocoon_dump_wrap() {
+        let buf = vec![0; 100];
+        let mut file = Cursor::new(buf);
+        let cocoon = Cocoon::from_seed(b"password", [0; 32]).with_weak_kdf();
+
+        // Prepare data inside of `Vec` container.
+        let data = b"my data".to_vec();
+
+        cocoon.dump(data, &mut file).expect("Dumped container");
+        assert_ne!(b"my data", file.get_ref().as_slice());
+
+        // "Re-open" the file.
+        file.set_position(0);
+
+        let original = cocoon.parse(&mut file).expect("Parsed container");
+        assert_eq!(b"my data", original.as_slice());
     }
 }
