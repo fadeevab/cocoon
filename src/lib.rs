@@ -8,8 +8,161 @@
 //!    1. Key store.
 //!    2. Password store.
 //!    3. Sensitive data store.
-//! 2. _Encrypted data transfer_:
+//! 2. For _encrypted data transfer_:
 //!    * As a secure in-memory container.
+//!
+//! # Basic Usage
+//!
+//! ### Wrap a cocoon
+//! One party stores a private data into a container.
+//!
+//! ```
+//! # use cocoon::{Cocoon, Error};
+//! #
+//! # fn main() -> Result<(), Error> {
+//! let cocoon = Cocoon::new(b"password");
+//! # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+//!
+//! let wrapped = cocoon.wrap(b"my secret data")?;
+//! assert_ne!(&wrapped, b"my secret data");
+//!
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! ### Unwrap the cocoon
+//! Another party (or the same one, or whoever knows the password) loads a private data
+//! from the container.
+//! ```
+//! # use cocoon::{Cocoon, Error};
+//! #
+//! # fn main() -> Result<(), Error> {
+//! let cocoon = Cocoon::new(b"password");
+//! # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+//!
+//! # let wrapped = cocoon.wrap(b"my secret data")?;
+//! # assert_ne!(&wrapped, b"my secret data");
+//! #
+//! let unwrapped = cocoon.unwrap(&wrapped)?;
+//! assert_eq!(unwrapped, b"my secret data");
+//!
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Format
+//!
+//! <img src="../../../images/cocoon_format.svg" />
+//!
+//! # Wrap/Unwrap
+//! ```
+//! # use cocoon::{Cocoon, Error};
+//! #
+//! # fn main() -> Result<(), Error> {
+//! let cocoon = Cocoon::new(b"password");
+//! # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+//!
+//! let wrapped = cocoon.wrap(b"my secret data")?;
+//! assert_ne!(&wrapped, b"my secret data");
+//!
+//! let unwrapped = cocoon.unwrap(&wrapped)?;
+//! assert_eq!(unwrapped, b"my secret data");
+//!
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Dump/Parse
+//! You can store data to file. Put data into [`Vec`] container, the data is going to be
+//! encrypted _in place_ and stored in the file using the "cocoon" format.
+//! ```
+//! # use cocoon::{Cocoon, Error};
+//! # use std::io::Cursor;
+//! #
+//! # fn main() -> Result<(), Error> {
+//! let mut data: Vec<u8> = "my secret data".as_bytes().to_vec();
+//! let cocoon = Cocoon::new(b"password");
+//! # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+//! # let mut file = Cursor::new(vec![0; 150]);
+//!
+//! cocoon.dump(data, &mut file)?;
+//! # assert_ne!(file.get_ref(), b"my secret data");
+//!
+//! # file.set_position(0);
+//! #
+//! let data = cocoon.parse(&mut file)?;
+//! assert_eq!(&data, b"my secret data");
+//!
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Encrypt/Decrypt
+//! You can encrypt data in place and avoid re-allocations. The method operates with a detached
+//! meta-data (a container format prefix) in the array on the stack. It is suitable for "`no_std`"
+//! build and whenever you want to evade re-allocations of a huge amount of data. You have to care
+//! how to store and transfer a data length and a container prefix though.
+//! ```
+//! # use cocoon::{Cocoon, Error};
+//! #
+//! # fn main() -> Result<(), Error> {
+//! # // Using [`ThreadRng`] in a sake of example, though it's supposed to be any third-party
+//! # // non-standard crypto RNG.
+//! # let mut good_rng = rand::rngs::ThreadRng::default();
+//! let mut data = "my secret data".to_owned().into_bytes();
+//! let cocoon = Cocoon::from_crypto_rng(b"password", good_rng);
+//! # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+//!
+//! let detached_prefix = cocoon.encrypt(&mut data)?;
+//! assert_ne!(data, b"my secret data");
+//!
+//! cocoon.decrypt(&mut data, &detached_prefix)?;
+//! assert_eq!(data, b"my secret data");
+//!
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! # Default Cryptography Configuration
+//! | Option           | Value                          |
+//! |------------------|--------------------------------|
+//! | Cipher           | Chacha20Poly1305               |
+//! | Key derivation   | PBKDF2 with 100 000 iterations |
+//! | Random generator | [`ThreadRng`]                  |
+//!
+//! * Cipher can be customized using [`Cocoon::with_cipher`] method.
+//! * Key derivation (KDF): only PBKDF2 is supported.
+//! * Random generator:
+//!   - [`ThreadRng`] in `std` build.
+//!   - [`StdRng`] in "no std" build: use [`Cocoon::from_rng`] and other `from_*` methods.
+//!   - [`Cocoon::from_entropy`] functions.
+//!
+//! # Features
+//!
+//! You can customize the package compilation with the following feature set:
+//!
+//! | Feature      | Description                                                                  |
+//! |--------------|------------------------------------------------------------------------------|
+//! | `std`        | Enables almost all API, including I/O, excluding `getrandom` feature.        |
+//! | `alloc`      | Enables API with memory allocation, but without [`std`] dependency.          |
+//! | `getrandom`  | Enables [`Cocoon::from_entropy`].                                            |
+//! |  no features | Creation and decryption a cocoon on the stack with no thread RNG, I/O, heap. |
+//!
+//! `std` is enabled by default, so you can just link the `cocoon` to you project:
+//! ```toml
+//! [dependencies]
+//! cocoon = "0"
+//! ```
+//! To use no features:
+//! ```toml
+//! [dependencies]
+//! cocoon = { version = "0", default-features = false }
+//! ```
+//! To use only `alloc` feature:
+//! ```toml
+//! [dependencies]
+//! cocoon = { version = "0", default-features = false, features = ['alloc'] }
+//! ```
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs, unused_qualifications)]
@@ -61,158 +214,11 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 
 /// Stores data securely inside of encrypted container.
 ///
-/// # Basic Usage
+/// See examples and basic usage on the [`main page`](index.html).
 ///
-/// ### Wrap a cocoon
-/// One party stores a private data into a container.
-///
-/// ```
-/// # use cocoon::{Cocoon, Error};
-/// #
-/// # fn main() -> Result<(), Error> {
-/// let cocoon = Cocoon::new(b"password");
-/// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
-///
-/// let wrapped = cocoon.wrap(b"my secret data")?;
-/// assert_ne!(&wrapped, b"my secret data");
-///
-/// # Ok(())
-/// # }
-/// ```
-///
-/// ### Unwrap the cocoon
-/// Another party (or the same one, or whoever knows the password) loads a private data
-/// from the container.
-/// ```
-/// # use cocoon::{Cocoon, Error};
-/// #
-/// # fn main() -> Result<(), Error> {
-/// let cocoon = Cocoon::new(b"password");
-/// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
-///
-/// # let wrapped = cocoon.wrap(b"my secret data")?;
-/// # assert_ne!(&wrapped, b"my secret data");
-/// #
-/// let unwrapped = cocoon.unwrap(&wrapped)?;
-/// assert_eq!(unwrapped, b"my secret data");
-///
-/// # Ok(())
-/// # }
-/// ```
-///
-/// # Wrap/Unwrap
-/// ```
-/// # use cocoon::{Cocoon, Error};
-/// #
-/// # fn main() -> Result<(), Error> {
-/// let cocoon = Cocoon::new(b"password");
-/// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
-///
-/// let wrapped = cocoon.wrap(b"my secret data")?;
-/// assert_ne!(&wrapped, b"my secret data");
-///
-/// let unwrapped = cocoon.unwrap(&wrapped)?;
-/// assert_eq!(unwrapped, b"my secret data");
-///
-/// # Ok(())
-/// # }
-/// ```
-///
-/// # Dump/Parse
-/// ```
-/// # use cocoon::{Cocoon, Error};
-/// # use std::io::Cursor;
-/// #
-/// # fn main() -> Result<(), Error> {
-/// let mut data: Vec<u8> = "my secret data".as_bytes().to_vec();
-///
-/// // Open a writable file.
-/// let mut file = Cursor::new(vec![0; 150]);
-///
-/// let mut cocoon = Cocoon::new(b"password");
-/// # let mut cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
-///
-/// // Store a sensitive data into the file using encrypted format.
-/// cocoon.dump(data, &mut file)?;
-/// assert_ne!(file.get_ref(), b"my secret data");
-///
-/// // Re-open the file.
-/// file.set_position(0);
-///
-/// // Parse the file retrieving the securely stored data.
-/// let data = cocoon.parse(&mut file)?;
-/// assert_eq!(&data, b"my secret data");
-///
-/// # Ok(())
-/// # }
-/// ```
-///
-/// # Encrypt/Decrypt
-/// ```
-/// # use cocoon::{Cocoon, Error};
-/// #
-/// # fn main() -> Result<(), Error> {
-/// # // Using [`ThreadRng`] in a sake of example, though it's supposed to be any third-party
-/// # // non-standard crypto RNG.
-/// # let mut good_rng = rand::rngs::ThreadRng::default();
-/// let mut data = "my secret data".to_owned().into_bytes();
-///
-/// let cocoon = Cocoon::from_crypto_rng(b"password", good_rng);
-/// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
-///
-/// let detached_prefix = cocoon.encrypt(&mut data)?;
-/// assert_ne!(data, b"my secret data");
-///
-/// cocoon.decrypt(&mut data, &detached_prefix)?;
-/// assert_eq!(data, b"my secret data");
-///
-/// # Ok(())
-/// # }
-/// ```
-///
-/// # Default Cryptography Configuration
-/// | Option           | Value                          |
-/// |------------------|--------------------------------|
-/// | Cipher           | Chacha20Poly1305               |
-/// | Key derivation   | PBKDF2 with 100 000 iterations |
-/// | Random generator | [`ThreadRng`]                  |
-///
-/// * Cipher can be customized using [`with_cipher`](Cocoon::with_cipher) method.
-/// * Key derivation (KDF): only PBKDF2 is supported.
-/// * Random generator:
-///   - [`ThreadRng`] in `std` build.
-///   - [`StdRng`] in "no std" build: use [`from_rng`](Cocoon::from_rng) and other `from_*` methods.
-///   - [`from_entropy`](Cocoon::from_entropy) functions.
-///
-/// # Features
-///
-/// You can customize the package compilation with the following feature set:
-///
-/// | Feature      | Description                                                                  |
-/// |--------------|------------------------------------------------------------------------------|
-/// | `std`        | Enables almost all API, including I/O, excluding `getrandom` feature.        |
-/// | `alloc`      | Enables API with memory allocation, but without [`std`] dependency.          |
-/// | `getrandom`  | Enables [`Cocoon::from_entropy`].                                            |
-/// |  no features | Creation and decryption a cocoon on the stack with no thread RNG, I/O, heap. |
-///
-/// `std` is enabled by default, so you can just link the `cocoon` to you project:
-/// ```toml
-/// [dependencies]
-/// cocoon = "0"
-/// ```
-/// To use no features:
-/// ```toml
-/// [dependencies]
-/// cocoon = { version = "0", default-features = false }
-/// ```
-/// To use only `alloc` feature:
-/// ```toml
-/// [dependencies]
-/// cocoon = { version = "0", default-features = false, features = ['alloc'] }
-/// ```
 /// # Features and Methods Mapping
 ///
-/// _Note: This is not a complete list of API methods. Please, refer to the current
+/// _Note: This is a not complete list of API methods. Please, refer to the current
 /// documentation below to get familiarized with the full set of the methods._
 ///
 /// | Method ↓ / Feature →        | `std` | `alloc` | "no_std" |
@@ -385,7 +391,7 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
     /// * `writer` - [`File`](std::fs::File), [`Cursor`](`std::io::Cursor`), or any other output.
     #[cfg(feature = "std")]
     #[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
-    pub fn dump(&mut self, mut data: Vec<u8>, writer: &mut impl Write) -> Result<(), Error> {
+    pub fn dump(&self, mut data: Vec<u8>, writer: &mut impl Write) -> Result<(), Error> {
         let detached_prefix = self.encrypt(&mut data)?;
 
         writer.write_all(&detached_prefix)?;
@@ -394,11 +400,13 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
         Ok(())
     }
 
-    /// Encrypts data in place and returns a formatted prefix of the container.
+    /// Encrypts data in place and returns a detached prefix of the container.
     ///
     /// The prefix is needed to decrypt data with [`Cocoon::decrypt`].
-    /// This method doesn't use memory allocation and it is suitable with no [`std`]
-    /// and no [`alloc`] build.
+    /// This method doesn't use memory allocation and it is suitable in the build
+    /// with no [`std`] and no [`alloc`].
+    ///
+    /// <img src="../../../images/cocoon_detached_prefix.svg" />
     pub fn encrypt(&self, data: &mut [u8]) -> Result<[u8; PREFIX_SIZE], Error> {
         let mut rng = self.rng.clone();
 
@@ -475,20 +483,20 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
         Ok(body)
     }
 
-    /// Decrypts data in place using the parts returned by `encrypt` method.
+    /// Decrypts data in place using the parts returned by [`Cocoon::encrypt`] method.
     ///
     /// The method doesn't use memory allocation and is suitable for "no std" and "no alloc" build.
-    pub fn decrypt(&self, data: &mut [u8], prefix: &[u8]) -> Result<(), Error> {
-        let prefix = FormatPrefix::deserialize(prefix)?;
+    pub fn decrypt(&self, data: &mut [u8], detached_prefix: &[u8]) -> Result<(), Error> {
+        let prefix = FormatPrefix::deserialize(detached_prefix)?;
 
         self.decrypt_parsed(data, &prefix)
     }
 
-    fn decrypt_parsed(&self, data: &mut [u8], prefix: &FormatPrefix) -> Result<(), Error> {
+    fn decrypt_parsed(&self, data: &mut [u8], detached_prefix: &FormatPrefix) -> Result<(), Error> {
         let mut salt = [0u8; 16];
         let mut nonce = [0u8; 12];
 
-        let header = prefix.header();
+        let header = detached_prefix.header();
 
         if data.len() < header.data_length() {
             return Err(Error::TooShort);
@@ -507,16 +515,16 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
 
         let nonce = GenericArray::from_slice(&nonce);
         let master_key = GenericArray::clone_from_slice(master_key.as_ref());
-        let tag = GenericArray::from_slice(&prefix.tag());
+        let tag = GenericArray::from_slice(&detached_prefix.tag());
 
         match header.config().cipher() {
             CocoonCipher::Chacha20Poly1305 => {
                 let cipher = ChaCha20Poly1305::new(master_key);
-                cipher.decrypt_in_place_detached(nonce, &prefix.prefix(), data, tag)
+                cipher.decrypt_in_place_detached(nonce, &detached_prefix.prefix(), data, tag)
             }
             CocoonCipher::Aes256Gcm => {
                 let cipher = Aes256Gcm::new(master_key);
-                cipher.decrypt_in_place_detached(nonce, &prefix.prefix(), data, tag)
+                cipher.decrypt_in_place_detached(nonce, &detached_prefix.prefix(), data, tag)
             }
         }
         .map_err(|_| Error::Cryptography)?;
