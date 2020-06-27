@@ -1,7 +1,7 @@
 //! # Cocoon
 //!
 //! [`Cocoon`] is a protected container to wrap sensitive data with a strong encryption
-//! and format validation. A format of the [`Cocoon`] is developed for the following
+//! and format validation. A format of [`Cocoon`] is developed for the following
 //! practical cases:
 //!
 //! 1. As a _file format_ to organize a simple secure storage:
@@ -18,7 +18,7 @@
 //! # Basic Usage
 //!
 //! ### Wrap a cocoon
-//! One party stores a private data into a container.
+//! One party wraps a private data into a container using [`Cocoon::wrap`].
 //!
 //! ```
 //! # use cocoon::{Cocoon, Error};
@@ -35,8 +35,8 @@
 //! ```
 //!
 //! ### Unwrap the cocoon
-//! Another party (or the same one, or whoever knows the password) loads a private data
-//! from the container.
+//! Another party (or the same one, or whoever knows the password) unwraps a private data
+//! out of the container using [`Cocoon::unwrap`].
 //! ```
 //! # use cocoon::{Cocoon, Error};
 //! #
@@ -55,6 +55,7 @@
 //! ```
 //!
 //! # Wrap/Unwrap
+//! 📌 [`wrap`](Cocoon::wrap)/[`unwrap`](Cocoon::unwrap)
 //! ```
 //! # use cocoon::{Cocoon, Error};
 //! #
@@ -73,8 +74,10 @@
 //! ```
 //!
 //! # Dump/Parse
+//! 📌 [`dump`](Cocoon::dump)/[`parse`](Cocoon::parse)
+//!
 //! You can store data to file. Put data into [`Vec`] container, the data is going to be
-//! encrypted _in place_ and stored in the file using the "cocoon" format.
+//! encrypted _in place_ and stored in a file using the "cocoon" [format](#format).
 //! ```
 //! # use cocoon::{Cocoon, Error};
 //! # use std::io::Cursor;
@@ -98,6 +101,8 @@
 //! ```
 //!
 //! # Encrypt/Decrypt
+//! 📌 [`encrypt`](Cocoon::encrypt)/[`decrypt`](Cocoon::decrypt)
+//!
 //! You can encrypt data in place and avoid re-allocations. The method operates with a detached
 //! meta-data (a container format prefix) in the array on the stack. It is suitable for "`no_std`"
 //! build and whenever you want to evade re-allocations of a huge amount of data. You have to care
@@ -283,7 +288,7 @@ impl<'a> Cocoon<'a, StdRng, Creation> {
     /// This method can be used when [`ThreadRng`] is not accessible with no [`std`].
     ///
     /// **WARNING**: Use this method carefully, don't feed it with a static seed unless testing!
-    /// See [`SeedableRng::from_seed`], which is used under the hood, for more details.
+    /// See [`SeedableRng::from_seed`], which is under the hood, for more details.
     ///
     /// # Examples
     /// ```
@@ -441,8 +446,11 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
 
     /// Encrypts data in place, taking ownership over the buffer, and dumps the container
     /// into [`File`](std::fs::File), [`Cursor`](std::io::Cursor), or any other writer.
-    /// * `data` - sensitive data to be encrypted in place.
+    /// * `data` - a sensitive data inside of [`Vec`] to be encrypted in place.
     /// * `writer` - [`File`](std::fs::File), [`Cursor`](`std::io::Cursor`), or any other output.
+    ///
+    /// The data is going to be encrypted in place and stored in a file using the "cocoon"
+    /// [format](#format).
     #[cfg(feature = "std")]
     #[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
     pub fn dump(&self, mut data: Vec<u8>, writer: &mut impl Write) -> Result<(), Error> {
