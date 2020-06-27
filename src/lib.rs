@@ -1,4 +1,4 @@
-//! # Cocoon 🦋
+//! # Cocoon
 //!
 //! [`Cocoon`] is a protected container to wrap sensitive data with a strong encryption
 //! and format validation. A format of the [`Cocoon`] is developed for the following
@@ -123,21 +123,7 @@
 //! # }
 //! ```
 //!
-//! # Default Cryptography Configuration
-//! | Option           | Value                          |
-//! |------------------|--------------------------------|
-//! | Cipher           | Chacha20Poly1305               |
-//! | Key derivation   | PBKDF2 with 100 000 iterations |
-//! | Random generator | [`ThreadRng`]                  |
-//!
-//! * Cipher can be customized using [`Cocoon::with_cipher`] method.
-//! * Key derivation (KDF): only PBKDF2 is supported.
-//! * Random generator:
-//!   - [`ThreadRng`] in `std` build.
-//!   - [`StdRng`] in "no std" build: use [`Cocoon::from_rng`] and other `from_*` methods.
-//!   - [`Cocoon::from_entropy`] functions.
-//!
-//! # Features
+//! # Crate Features
 //!
 //! You can customize the package compilation with the following feature set:
 //!
@@ -214,7 +200,26 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 
 /// Stores data securely inside of encrypted container.
 ///
-/// See examples and basic usage on the [`main page`](index.html).
+/// # Basic Usage
+/// See examples on the [`main page`](index.html).
+///
+/// # Format
+///
+/// <img src="../../../images/cocoon_format.svg" />
+///
+/// # Default Configuration
+/// | Option           | Value                          |
+/// |------------------|--------------------------------|
+/// | Cipher           | Chacha20Poly1305               |
+/// | Key derivation   | PBKDF2 with 100 000 iterations |
+/// | Random generator | [`ThreadRng`]                  |
+///
+/// * Cipher can be customized using [`Cocoon::with_cipher`] method.
+/// * Key derivation (KDF): only PBKDF2 is supported.
+/// * Random generator:
+///   - [`ThreadRng`] in `std` build.
+///   - [`StdRng`] in "no std" build: use [`Cocoon::from_rng`] and other `from_*` methods.
+///   - [`Cocoon::from_entropy`] functions.
 ///
 /// # Features and Methods Mapping
 ///
@@ -251,8 +256,14 @@ impl<'a> Cocoon<'a, ThreadRng, Creation> {
     /// Creates a new `Cocoon` with [`ThreadRng`] random generator under the hood
     /// and a [Default Configuration](#default-configuration).
     ///
-    /// * `password` - a shared reference to a password.
+    /// * `password` - a shared reference to a password
     ///
+    /// # Examples
+    /// ```
+    /// use cocoon::Cocoon;
+    ///
+    /// let cocoon = Cocoon::new(b"my secret password");
+    /// ```
     pub fn new(password: &'a [u8]) -> Self {
         Cocoon {
             password,
@@ -264,11 +275,27 @@ impl<'a> Cocoon<'a, ThreadRng, Creation> {
 }
 
 impl<'a> Cocoon<'a, StdRng, Creation> {
-    /// Creates a new `Cocoon` with a seeded random generator.
+    /// Creates a new `Cocoon` seeding a random generator using the given buffer.
     ///
-    /// This method can be used when [`ThreadRng`] is not accessible in "no [`std`]" build.
+    /// * `password` - a shared reference to a password
+    /// * `seed` - 32 bytes of a random seed obtained from crypto RNG
+    ///
+    /// This method can be used when [`ThreadRng`] is not accessible with no [`std`].
     ///
     /// **WARNING**: Use this method carefully, don't feed it with a static seed unless testing!
+    /// See [`SeedableRng::from_seed`], which is used under the hood, for more details.
+    ///
+    /// # Examples
+    /// ```
+    /// use cocoon::Cocoon;
+    /// use rand::Rng;
+    ///
+    /// // Seed can be obtained by any cryptographically strong random generator.
+    /// // ThreadRng is used just for example.
+    /// let seed = rand::thread_rng().gen::<[u8; 32]>();
+    ///
+    /// let cocoon = Cocoon::from_seed(b"password", seed);
+    /// ```
     pub fn from_seed(password: &'a [u8], seed: [u8; 32]) -> Self {
         Cocoon {
             password,
@@ -307,13 +334,43 @@ impl<'a> Cocoon<'a, StdRng, Creation> {
 }
 
 impl<'a> Cocoon<'a, NoRng, Parsing> {
-    /// Creates a [`Cocoon`] instance with no accessible creation methods like [`Cocoon::wrap`],
-    /// [`Cocoon::dump`] and [`Cocoon::encrypt`].
+    /// Creates a [`Cocoon`] instance with parsing methods accessible only like [`Cocoon::unwrap`],
+    /// [`Cocoon::parse`] and [`Cocoon::decrypt`].
     ///
-    /// This method is needed if you don't need to encrypt a container, and to only decrypt one.
     /// All encryption methods need a cryptographic random generator to generate a salt and nonces,
-    /// and parsing gets the from the container, therefore [`Cocoon::parse_only`] can be suitable
+    /// and parsing gets them from the container, therefore [`Cocoon::parse_only`] can be suitable
     /// to simply unwrap a cocoon, and it works in a limited embedded environment.
+    ///
+    /// # Example: Encryption Methods Are Inaccessible
+    ///
+    /// The [`wrap`](Cocoon::wrap)/[`encrypt`](Cocoon::encrypt)/[`dump`](Cocoon::dump) methods are
+    /// **not** accessible _at compile time_ when [`Cocoon::parse_only`] is used. Therefore the
+    /// following code snippet fails on compilation.
+    /// ```compile_fail
+    /// use cocoon::Cocoon;
+    ///
+    /// let cocoon = Cocoon::parse_only(b"password");
+    ///
+    /// // Compilation fails here.
+    /// cocoon.wrap(b"my data");
+    /// ```
+    ///
+    /// # Example: Only Decryption Methods
+    ///
+    /// ```should_panic
+    /// use cocoon::{Cocoon, Error};
+    ///
+    /// # fn main() -> Result<(), Error> {
+    /// let cocoon = Cocoon::parse_only(b"password");
+    ///
+    /// # let mut data = [0; 10]; // Fake data just to run the example.
+    /// # let detached_prefix = [0; 10]; // Fake prefix just to run the example.
+    /// #
+    /// cocoon.decrypt(&mut data, &detached_prefix)?;
+    /// #
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn parse_only(password: &'a [u8]) -> Self {
         Cocoon {
             password,
@@ -341,14 +398,11 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
     /// Sets an encryption algorithm to wrap data on.
     ///
     /// # Examples
-    ///
-    /// Basic usage:
     /// ```
-    /// //let cocoon = Cocoon::new(b"password").with_cipher(CocoonCipher::Aes256Gcm);
-    /// //cocoon.wrap(b"my secret data");
+    /// use cocoon::{Cocoon, CocoonCipher};
     ///
-    /// //let cocoon = Cocoon::new(b"password").with_cipher(CocoonCipher::Chacha20Poly1305);
-    /// //cocoon.wrap(b"my secret data");
+    /// let cocoon = Cocoon::new(b"password").with_cipher(CocoonCipher::Aes256Gcm);
+    /// cocoon.wrap(b"my secret data");
     /// ```
     pub fn with_cipher(mut self, cipher: CocoonCipher) -> Self {
         self.config = self.config.with_cipher(cipher);
@@ -533,8 +587,9 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
     }
 }
 
+#[doc(hidden)]
 #[derive(Clone)]
-struct NoRng;
+pub struct NoRng;
 
 impl CryptoRng for NoRng {}
 impl RngCore for NoRng {
