@@ -258,7 +258,7 @@ pub struct Cocoon<'a, R: CryptoRng + RngCore + Clone, M> {
 #[cfg(feature = "std")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
 impl<'a> Cocoon<'a, ThreadRng, Creation> {
-    /// Creates a new `Cocoon` with [`ThreadRng`] random generator under the hood
+    /// Creates a new [`Cocoon`] with [`ThreadRng`] random generator under the hood
     /// and a [Default Configuration](#default-configuration).
     ///
     /// * `password` - a shared reference to a password
@@ -280,7 +280,7 @@ impl<'a> Cocoon<'a, ThreadRng, Creation> {
 }
 
 impl<'a> Cocoon<'a, StdRng, Creation> {
-    /// Creates a new `Cocoon` seeding a random generator using the given buffer.
+    /// Creates a new [`Cocoon`] seeding a random generator using the given buffer.
     ///
     /// * `password` - a shared reference to a password
     /// * `seed` - 32 bytes of a random seed obtained from crypto RNG
@@ -295,7 +295,7 @@ impl<'a> Cocoon<'a, StdRng, Creation> {
     /// use cocoon::Cocoon;
     /// use rand::Rng;
     ///
-    /// // Seed can be obtained by any cryptographically strong random generator.
+    /// // Seed can be obtained by any cryptographically secure random generator.
     /// // ThreadRng is used just for example.
     /// let seed = rand::thread_rng().gen::<[u8; 32]>();
     ///
@@ -310,9 +310,24 @@ impl<'a> Cocoon<'a, StdRng, Creation> {
         }
     }
 
-    /// Creates a new `Cocoon` applying a third party random generator.
+    /// Creates a new [`Cocoon`] applying a third party random generator.
     ///
-    /// This method can be used when [`ThreadRng`] is not accessible in "no [`std`]" build.
+    /// * `password` - a shared reference to a password
+    /// * `rng` - a source of random bytes
+    ///
+    /// This method can be used when [`ThreadRng`] is not accessible in build with no [`std`].
+    ///
+    /// # Examples
+    /// ```
+    /// use cocoon::Cocoon;
+    /// use rand;
+    ///
+    /// // rand::thread_rng() is just an example here, as easily accessible for tests.
+    /// let cocoon = Cocoon::from_rng(b"password", rand::thread_rng()).unwrap();
+    /// ```
+    ///
+    /// # References
+    /// Also see [`Cocoon::from_crypto_rng`] which doesn't fail.
     pub fn from_rng<R: RngCore>(password: &'a [u8], rng: R) -> Result<Self, rand::Error> {
         Ok(Cocoon {
             password,
@@ -322,10 +337,13 @@ impl<'a> Cocoon<'a, StdRng, Creation> {
         })
     }
 
-    /// Creates a new `Cocoon` with OS random generator from [`SeedableRng::from_entropy`].
+    /// Creates a new [`Cocoon`] with OS random generator using `getrandom` crate via
+    /// [`SeedableRng::from_entropy`].
     ///
-    /// The method can be used to create a `Cocoon` when [`ThreadRng`] is not accessible
-    /// in "no [`std`]" build.
+    /// * `password` - a shared reference to a password
+    ///
+    /// The method can be used to create a [`Cocoon`] when [`ThreadRng`] is not accessible
+    /// in build with no [`std`].
     #[cfg(any(feature = "getrandom", test))]
     #[cfg_attr(docs_rs, doc(cfg(feature = "getrandom")))]
     pub fn from_entropy(password: &'a [u8]) -> Self {
@@ -342,11 +360,13 @@ impl<'a> Cocoon<'a, NoRng, Parsing> {
     /// Creates a [`Cocoon`] instance with parsing methods accessible only like [`Cocoon::unwrap`],
     /// [`Cocoon::parse`] and [`Cocoon::decrypt`].
     ///
+    /// * `password` - a shared reference to a password
+    ///
     /// All encryption methods need a cryptographic random generator to generate a salt and nonces,
     /// and parsing gets them from the container, therefore [`Cocoon::parse_only`] can be suitable
     /// to simply unwrap a cocoon, and it works in a limited embedded environment.
     ///
-    /// # Example: Encryption Methods Are Inaccessible
+    /// # Encryption Methods Are Inaccessible
     ///
     /// The [`wrap`](Cocoon::wrap)/[`encrypt`](Cocoon::encrypt)/[`dump`](Cocoon::dump) methods are
     /// **not** accessible _at compile time_ when [`Cocoon::parse_only`] is used. Therefore the
@@ -360,7 +380,7 @@ impl<'a> Cocoon<'a, NoRng, Parsing> {
     /// cocoon.wrap(b"my data");
     /// ```
     ///
-    /// # Example: Only Decryption Methods
+    /// # Only Decryption Methods
     ///
     /// ```should_panic
     /// use cocoon::{Cocoon, Error};
@@ -387,7 +407,10 @@ impl<'a> Cocoon<'a, NoRng, Parsing> {
 }
 
 impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
-    /// Creates a new `Cocoon` using any third party random generator.
+    /// Creates a new `Cocoon` using any third party _cryptographically secure_ random generator.
+    ///
+    /// * `password` - a shared reference to a password
+    /// * `rng` - a cryptographically strong random generator
     pub fn from_crypto_rng(password: &'a [u8], rng: R) -> Self {
         Cocoon {
             password,
@@ -418,12 +441,22 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
     ///
     /// This modifier could be used for testing in debug mode, and should not be used
     /// in a production and release builds.
+    ///
+    /// # Examples
+    /// ```
+    /// use cocoon::Cocoon;
+    ///
+    /// let cocoon = Cocoon::new(b"password").with_weak_kdf();
+    /// cocoon.wrap(b"my secret data");
+    /// ```
     pub fn with_weak_kdf(mut self) -> Self {
         self.config = self.config.with_weak_kdf();
         self
     }
 
     /// Wraps data into an encrypted container.
+    ///
+    /// * `data` - a sensitive user data
     #[cfg(feature = "alloc")]
     #[cfg_attr(docs_rs, doc(cfg(any(feature = "alloc", feature = "std"))))]
     pub fn wrap(&self, data: &[u8]) -> Result<Vec<u8>, Error> {
