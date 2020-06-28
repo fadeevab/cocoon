@@ -12,7 +12,7 @@ macro_rules! match_enum {
     };
 }
 
-/// Supported 256-bit AEAD ciphers (Authenticated Encryption with Associated Data).
+/// 256-bit AEAD ciphers (Authenticated Encryption with Associated Data).
 #[derive(Clone, Copy)]
 #[cfg_attr(test, derive(Debug, PartialEq))]
 pub enum CocoonCipher {
@@ -22,7 +22,7 @@ pub enum CocoonCipher {
     Aes256Gcm,
 }
 
-/// Supported key derivation functions (KDF) to derive master key
+/// Key derivation functions (KDF) to derive master key
 /// from user password. PBKDF2 by default.
 #[derive(Clone, Copy)]
 #[cfg_attr(test, derive(Debug, PartialEq))]

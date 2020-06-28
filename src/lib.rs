@@ -1,8 +1,8 @@
 //! # Cocoon
 //!
-//! [`Cocoon`] is a protected container to wrap sensitive data with a strong encryption
-//! and format validation. A format of [`Cocoon`] is developed for the following
-//! practical cases:
+//! [`Cocoon`] is a protected container to wrap sensitive data with a strong
+//! [encryption](#cryptography) and format validation. A format of [`Cocoon`] is developed
+//! for the following practical cases:
 //!
 //! 1. As a _file format_ to organize a simple secure storage:
 //!    1. Key store.
@@ -11,50 +11,20 @@
 //! 2. For _encrypted data transfer_:
 //!    * As a secure in-memory container.
 //!
-//! # Format
+//! # Problem
 //!
-//! <img src="../../../images/cocoon_format.svg" />
+//! Every time you need to organize any kind of secure storage you need to
+//! re-invent the wheel: the way how to encrypt data, store random material, then get it back,
+//! parse, and decrypt data securely. Instead you can use [`Cocoon`].
 //!
 //! # Basic Usage
 //!
-//! ### Wrap a cocoon
+//! ## Wrap/Unwrap
+//!
 //! One party wraps a private data into a container using [`Cocoon::wrap`].
-//!
-//! ```
-//! # use cocoon::{Cocoon, Error};
-//! #
-//! # fn main() -> Result<(), Error> {
-//! let cocoon = Cocoon::new(b"password");
-//! # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
-//!
-//! let wrapped = cocoon.wrap(b"my secret data")?;
-//! assert_ne!(&wrapped, b"my secret data");
-//!
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! ### Unwrap the cocoon
 //! Another party (or the same one, or whoever knows the password) unwraps a private data
 //! out of the container using [`Cocoon::unwrap`].
-//! ```
-//! # use cocoon::{Cocoon, Error};
-//! #
-//! # fn main() -> Result<(), Error> {
-//! let cocoon = Cocoon::new(b"password");
-//! # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
 //!
-//! # let wrapped = cocoon.wrap(b"my secret data")?;
-//! # assert_ne!(&wrapped, b"my secret data");
-//! #
-//! let unwrapped = cocoon.unwrap(&wrapped)?;
-//! assert_eq!(unwrapped, b"my secret data");
-//!
-//! # Ok(())
-//! # }
-//! ```
-//!
-//! # Wrap/Unwrap
 //! 📌 [`wrap`](Cocoon::wrap)/[`unwrap`](Cocoon::unwrap)
 //! ```
 //! # use cocoon::{Cocoon, Error};
@@ -73,7 +43,7 @@
 //! # }
 //! ```
 //!
-//! # Dump/Parse
+//! ## Dump/Parse
 //! 📌 [`dump`](Cocoon::dump)/[`parse`](Cocoon::parse)
 //!
 //! You can store data to file. Put data into [`Vec`] container, the data is going to be
@@ -83,7 +53,7 @@
 //! # use std::io::Cursor;
 //! #
 //! # fn main() -> Result<(), Error> {
-//! let mut data: Vec<u8> = "my secret data".as_bytes().to_vec();
+//! let mut data = b"my secret data".to_vec();
 //! let cocoon = Cocoon::new(b"password");
 //! # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
 //! # let mut file = Cursor::new(vec![0; 150]);
@@ -100,7 +70,7 @@
 //! # }
 //! ```
 //!
-//! # Encrypt/Decrypt
+//! ## Encrypt/Decrypt
 //! 📌 [`encrypt`](Cocoon::encrypt)/[`decrypt`](Cocoon::decrypt)
 //!
 //! You can encrypt data in place and avoid re-allocations. The method operates with a detached
@@ -111,8 +81,8 @@
 //! # use cocoon::{Cocoon, Error};
 //! #
 //! # fn main() -> Result<(), Error> {
-//! # // Using [`ThreadRng`] in a sake of example, though it's supposed to be any third-party
-//! # // non-standard crypto RNG.
+//! # // [`ThreadRng`] is used here just as an example. It is supposed to apply some other
+//! # // cryptographically secure RNG when [`ThreadRng`] is not accessible.
 //! # let mut good_rng = rand::rngs::ThreadRng::default();
 //! let mut data = "my secret data".to_owned().into_bytes();
 //! let cocoon = Cocoon::from_crypto_rng(b"password", good_rng);
@@ -154,6 +124,65 @@
 //! [dependencies]
 //! cocoon = { version = "0", default-features = false, features = ['alloc'] }
 //! ```
+//!
+//! # Format
+//!
+//! <img alt="Cocoon container format" src="../../../images/cocoon_format.svg" />
+//!
+//! # Cryptography
+//!
+//! [`Cocoon`] is based on 256-bit cryptography.
+//!
+//! | Cipher (AEAD)     | Key Derivation Function (KDF)    |
+//! |-------------------|----------------------------------|
+//! | Chacha20-Poly1305 | PBKDF2-SHA256: 100000 iterations |
+//! | AES256-GCM        |                                  |
+//!
+//! * Keys: 256-bit.
+//! * Random salt for KDF: 128-bit.
+//! * Random nonce for encryption: 96-bit.
+//!
+//! # Container Creation
+//! First, a random material is generated. A _salt_ is going to get mixed into a
+//! master key, and a _nonce_ is used for AEAD encryption. All arrays are put
+//! into a header which prefixes the final container.
+//!
+//! <img alt="Salt and nonce" src="../../../images/cocoon_creation_rng.svg" />
+//!
+//! Then a _master key_ is derived from a password using selected Key Derivation Function
+//! (KDF, e.g. PBKDF2) and a random salt.
+//!
+//! <img alt="Master key generation" src="../../../images/cocoon_creation_key.svg" />
+//!
+//! At this moment we have everything to encrypt data and to create a container.
+//! Authenticated Encryption with Associated Data (AEAD) is used to encrypt data and to produce
+//! a _tag_ which controls integrity of both _header_ and _data_. The tag is deliberately
+//! placed at the beginning that allows to detach the whole prefix (header and tag) which helps
+//! certain cases, e.g. it allows to work on stack, makes API more flexible, gets additional
+//! control over the container format.
+//!
+//! <img alt="How Cocoon container is created" src="../../../images/cocoon_encryption.svg" />
+//!
+//! Container can be dumped to file, or it can be kept in the buffer.
+//!
+//! ## Container Parsing
+//!
+//! It starts from header parsing because random material is needed to restore a master key in
+//! order to decrypt a data.
+//!
+//! <img alt="How Cocoon header is parsed" src="../../../images/cocoon_header_parsing.svg" />
+//!
+//! Random generator is not needed in this case. (That's why [`Cocoon::parse_only`] is provided
+//! as an alternative way to initialize [`Cocoon`] to only parse a container without necessity
+//! to initialize RNG.)
+//!
+//! A master key is derived from a password and a salt.
+//!
+//! <img alt="Master key generation" src="../../../images/cocoon_creation_key.svg" />
+//!
+//! Finally, integrity of all parts is verified and data is decrypted.
+//!
+//! <img alt="Cocoon parsing" src="../../../images/cocoon_parsing.svg" />
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs, unused_qualifications)]
@@ -205,19 +234,12 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 
 /// Stores data securely inside of encrypted container.
 ///
-/// # Basic Usage
-/// See examples on the [`main page`](index.html).
-///
-/// # Format
-///
-/// <img src="../../../images/cocoon_format.svg" />
-///
 /// # Default Configuration
-/// | Option           | Value                          |
-/// |------------------|--------------------------------|
-/// | Cipher           | Chacha20Poly1305               |
-/// | Key derivation   | PBKDF2 with 100 000 iterations |
-/// | Random generator | [`ThreadRng`]                  |
+/// | Option                      | Value                          |
+/// |-----------------------------|--------------------------------|
+/// | [Cipher](CocoonCipher)      | Chacha20Poly1305               |
+/// | [Key derivation](CocoonKdf) | PBKDF2 with 100 000 iterations |
+/// | Random generator            | [`ThreadRng`]                  |
 ///
 /// * Cipher can be customized using [`Cocoon::with_cipher`] method.
 /// * Key derivation (KDF): only PBKDF2 is supported.
@@ -283,12 +305,9 @@ impl<'a> Cocoon<'a, StdRng, Creation> {
     /// Creates a new [`Cocoon`] seeding a random generator using the given buffer.
     ///
     /// * `password` - a shared reference to a password
-    /// * `seed` - 32 bytes of a random seed obtained from crypto RNG
+    /// * `seed` - 32 bytes of a random seed obtained from external RNG
     ///
     /// This method can be used when [`ThreadRng`] is not accessible with no [`std`].
-    ///
-    /// **WARNING**: Use this method carefully, don't feed it with a static seed unless testing!
-    /// See [`SeedableRng::from_seed`], which is under the hood, for more details.
     ///
     /// # Examples
     /// ```
@@ -301,6 +320,9 @@ impl<'a> Cocoon<'a, StdRng, Creation> {
     ///
     /// let cocoon = Cocoon::from_seed(b"password", seed);
     /// ```
+    ///
+    /// **WARNING**: Use this method carefully, don't feed it with a static seed unless testing!
+    /// See [`SeedableRng::from_seed`], which is under the hood, for more details.
     pub fn from_seed(password: &'a [u8], seed: [u8; 32]) -> Self {
         Cocoon {
             password,
@@ -322,8 +344,10 @@ impl<'a> Cocoon<'a, StdRng, Creation> {
     /// use cocoon::Cocoon;
     /// use rand;
     ///
-    /// // rand::thread_rng() is just an example here, as easily accessible for tests.
-    /// let cocoon = Cocoon::from_rng(b"password", rand::thread_rng()).unwrap();
+    /// # // [`ThreadRng`] is used here just as an example. It is supposed to apply some other
+    /// # // cryptographically secure RNG when [`ThreadRng`] is not accessible.
+    /// # let mut good_rng = rand::rngs::ThreadRng::default();
+    /// let cocoon = Cocoon::from_rng(b"password", good_rng).unwrap();
     /// ```
     ///
     /// # References
@@ -342,8 +366,15 @@ impl<'a> Cocoon<'a, StdRng, Creation> {
     ///
     /// * `password` - a shared reference to a password
     ///
-    /// The method can be used to create a [`Cocoon`] when [`ThreadRng`] is not accessible
+    /// The method can be used to create [`Cocoon`] when [`ThreadRng`] is not accessible
     /// in build with no [`std`].
+    ///
+    /// # Examples
+    /// ```
+    /// use cocoon::Cocoon;
+    ///
+    /// let cocoon = Cocoon::from_entropy(b"password");
+    /// ```
     #[cfg(any(feature = "getrandom", test))]
     #[cfg_attr(docs_rs, doc(cfg(feature = "getrandom")))]
     pub fn from_entropy(password: &'a [u8]) -> Self {
@@ -357,31 +388,28 @@ impl<'a> Cocoon<'a, StdRng, Creation> {
 }
 
 impl<'a> Cocoon<'a, NoRng, Parsing> {
-    /// Creates a [`Cocoon`] instance with parsing methods accessible only like [`Cocoon::unwrap`],
-    /// [`Cocoon::parse`] and [`Cocoon::decrypt`].
+    /// Creates a [`Cocoon`] instance allowing to only decrypt a container. It makes only decryption
+    /// methods accessible at compile time: [`Cocoon::unwrap`], [`Cocoon::parse`] and
+    /// [`Cocoon::decrypt`].
     ///
     /// * `password` - a shared reference to a password
     ///
-    /// All encryption methods need a cryptographic random generator to generate a salt and nonces,
-    /// and parsing gets them from the container, therefore [`Cocoon::parse_only`] can be suitable
-    /// to simply unwrap a cocoon, and it works in a limited embedded environment.
-    ///
-    /// # Encryption Methods Are Inaccessible
+    /// All encryption methods need a cryptographic random generator to generate a salt and a nonce,
+    /// at the same time random generator is not needed for parsing.
     ///
     /// The [`wrap`](Cocoon::wrap)/[`encrypt`](Cocoon::encrypt)/[`dump`](Cocoon::dump) methods are
     /// **not** accessible _at compile time_ when [`Cocoon::parse_only`] is used. Therefore the
-    /// following code snippet fails on compilation.
+    /// compilation of the following code snippet fails.
     /// ```compile_fail
     /// use cocoon::Cocoon;
     ///
     /// let cocoon = Cocoon::parse_only(b"password");
     ///
-    /// // Compilation fails here.
+    /// // The compilation process fails here denying to use any encryption method.
     /// cocoon.wrap(b"my data");
     /// ```
     ///
-    /// # Only Decryption Methods
-    ///
+    /// Meanwhile decryption methods are accessible.
     /// ```should_panic
     /// use cocoon::{Cocoon, Error};
     ///
@@ -407,10 +435,22 @@ impl<'a> Cocoon<'a, NoRng, Parsing> {
 }
 
 impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
-    /// Creates a new `Cocoon` using any third party _cryptographically secure_ random generator.
+    /// Creates a new `Cocoon` using a third party _cryptographically secure_ random generator.
+    /// Unlike [`Cocoon::from_rng`] this method never fails.
     ///
     /// * `password` - a shared reference to a password
     /// * `rng` - a cryptographically strong random generator
+    ///
+    /// # Examples
+    /// ```
+    /// use cocoon::Cocoon;
+    /// # use rand;
+    ///
+    /// # // [`ThreadRng`] is used here just as an example. It is supposed to apply some other
+    /// # // cryptographically secure RNG when [`ThreadRng`] is not accessible.
+    /// # let mut good_rng = rand::rngs::ThreadRng::default();
+    /// let cocoon = Cocoon::from_crypto_rng(b"password", good_rng);
+    /// ```
     pub fn from_crypto_rng(password: &'a [u8], rng: R) -> Self {
         Cocoon {
             password,
@@ -439,7 +479,7 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
 
     /// Reduces a number of iterations for key derivation function (KDF).
     ///
-    /// This modifier could be used for testing in debug mode, and should not be used
+    /// ⚠️ This modifier could be used for testing in debug mode, and it should not be used
     /// in a production and release builds.
     ///
     /// # Examples
@@ -447,16 +487,31 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
     /// use cocoon::Cocoon;
     ///
     /// let cocoon = Cocoon::new(b"password").with_weak_kdf();
-    /// cocoon.wrap(b"my secret data");
+    /// cocoon.wrap(b"my secret data").expect("New container");
     /// ```
     pub fn with_weak_kdf(mut self) -> Self {
         self.config = self.config.with_weak_kdf();
         self
     }
 
-    /// Wraps data into an encrypted container.
+    /// Wraps data to an encrypted container.
     ///
     /// * `data` - a sensitive user data
+    ///
+    /// Examples:
+    /// ```
+    /// # use cocoon::{Cocoon, Error};
+    /// #
+    /// # fn main() -> Result<(), Error> {
+    /// let cocoon = Cocoon::new(b"password");
+    /// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+    ///
+    /// let wrapped = cocoon.wrap(b"my secret data")?;
+    /// assert_ne!(&wrapped, b"my secret data");
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(feature = "alloc")]
     #[cfg_attr(docs_rs, doc(cfg(any(feature = "alloc", feature = "std"))))]
     pub fn wrap(&self, data: &[u8]) -> Result<Vec<u8>, Error> {
@@ -479,11 +534,28 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
 
     /// Encrypts data in place, taking ownership over the buffer, and dumps the container
     /// into [`File`](std::fs::File), [`Cursor`](std::io::Cursor), or any other writer.
-    /// * `data` - a sensitive data inside of [`Vec`] to be encrypted in place.
-    /// * `writer` - [`File`](std::fs::File), [`Cursor`](`std::io::Cursor`), or any other output.
+    /// * `data` - a sensitive data inside of [`Vec`] to be encrypted in place
+    /// * `writer` - [`File`](std::fs::File), [`Cursor`](`std::io::Cursor`), or any other output
     ///
-    /// The data is going to be encrypted in place and stored in a file using the "cocoon"
+    /// A data is going to be encrypted in place and stored in a file using the "cocoon"
     /// [format](#format).
+    ///
+    /// # Examples
+    /// ```
+    /// # use cocoon::{Cocoon, Error};
+    /// # use std::io::Cursor;
+    /// #
+    /// # fn main() -> Result<(), Error> {
+    /// let mut data = b"my secret data".to_vec();
+    /// let cocoon = Cocoon::new(b"password");
+    /// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+    /// # let mut file = Cursor::new(vec![0; 150]);
+    ///
+    /// cocoon.dump(data, &mut file)?;
+    /// # assert_ne!(file.get_ref(), b"my secret data");
+    ///
+    /// # Ok(())
+    /// # }
     #[cfg(feature = "std")]
     #[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
     pub fn dump(&self, mut data: Vec<u8>, writer: &mut impl Write) -> Result<(), Error> {
@@ -502,6 +574,24 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
     /// with no [`std`] and no [`alloc`].
     ///
     /// <img src="../../../images/cocoon_detached_prefix.svg" />
+    ///
+    /// # Examples
+    /// ```
+    /// # use cocoon::{Cocoon, Error};
+    /// #
+    /// # fn main() -> Result<(), Error> {
+    /// # // [`ThreadRng`] is used here just as an example. It is supposed to apply some other
+    /// # // cryptographically secure RNG when [`ThreadRng`] is not accessible.
+    /// # let mut good_rng = rand::rngs::ThreadRng::default();
+    /// let mut data = "my secret data".to_owned().into_bytes();
+    /// let cocoon = Cocoon::from_crypto_rng(b"password", good_rng);
+    /// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+    ///
+    /// let detached_prefix = cocoon.encrypt(&mut data)?;
+    /// assert_ne!(data, b"my secret data");
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn encrypt(&self, data: &mut [u8]) -> Result<[u8; PREFIX_SIZE], Error> {
         let mut rng = self.rng.clone();
 
@@ -542,7 +632,25 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
 
 /// Parsing methods are always accessible. They don't need random generator in general.
 impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
-    /// Unwraps data from the wrapped format (see [`Cocoon::wrap`]).
+    /// Unwraps data from the encrypted container (see [`Cocoon::wrap`]).
+    ///
+    /// # Examples
+    /// ```
+    /// # use cocoon::{Cocoon, Error};
+    /// #
+    /// # fn main() -> Result<(), Error> {
+    /// let cocoon = Cocoon::new(b"password");
+    /// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+    ///
+    /// # let wrapped = cocoon.wrap(b"my secret data")?;
+    /// # assert_ne!(&wrapped, b"my secret data");
+    /// #
+    /// let unwrapped = cocoon.unwrap(&wrapped)?;
+    /// assert_eq!(unwrapped, b"my secret data");
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(feature = "alloc")]
     #[cfg_attr(docs_rs, doc(cfg(any(feature = "alloc", feature = "std"))))]
     pub fn unwrap(&self, container: &[u8]) -> Result<Vec<u8>, Error> {
@@ -563,6 +671,31 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
 
     /// Parses container from the reader (file, cursor, etc.), validates format,
     /// allocates memory and places decrypted data there.
+    ///
+    /// * `reader` - [`File`](std::fs::File), [`Cursor`](`std::io::Cursor`), or any other input
+    ///
+    /// # Examples
+    /// ```
+    /// # use cocoon::{Cocoon, Error};
+    /// # use std::io::Cursor;
+    /// #
+    /// # fn main() -> Result<(), Error> {
+    /// let mut data = b"my secret data".to_vec();
+    /// let cocoon = Cocoon::new(b"password");
+    /// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+    /// # let mut file = Cursor::new(vec![0; 150]);
+    ///
+    /// # cocoon.dump(data, &mut file)?;
+    /// # assert_ne!(file.get_ref(), b"my secret data");
+    /// #
+    /// # file.set_position(0);
+    /// #
+    /// let data = cocoon.parse(&mut file)?;
+    /// assert_eq!(&data, b"my secret data");
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
     #[cfg(feature = "std")]
     #[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
     pub fn parse(&self, reader: &mut impl Read) -> Result<Vec<u8>, Error> {
@@ -581,6 +714,28 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
     /// Decrypts data in place using the parts returned by [`Cocoon::encrypt`] method.
     ///
     /// The method doesn't use memory allocation and is suitable for "no std" and "no alloc" build.
+    ///
+    /// # Examples
+    /// ```
+    /// # use cocoon::{Cocoon, Error};
+    /// #
+    /// # fn main() -> Result<(), Error> {
+    /// # // [`ThreadRng`] is used here just as an example. It is supposed to apply some other
+    /// # // cryptographically secure RNG when [`ThreadRng`] is not accessible.
+    /// # let mut good_rng = rand::rngs::ThreadRng::default();
+    /// let mut data = "my secret data".to_owned().into_bytes();
+    /// let cocoon = Cocoon::from_crypto_rng(b"password", good_rng);
+    /// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+    ///
+    /// let detached_prefix = cocoon.encrypt(&mut data)?;
+    /// assert_ne!(data, b"my secret data");
+    ///
+    /// cocoon.decrypt(&mut data, &detached_prefix)?;
+    /// assert_eq!(data, b"my secret data");
+    /// #
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn decrypt(&self, data: &mut [u8], detached_prefix: &[u8]) -> Result<(), Error> {
         let prefix = FormatPrefix::deserialize(detached_prefix)?;
 
@@ -661,6 +816,7 @@ mod test {
         Cocoon::from_entropy(b"new password");
         Cocoon::from_rng(b"password", rand::thread_rng()).unwrap();
         Cocoon::from_crypto_rng(b"password", NoRng);
+        Cocoon::from_crypto_rng(b"password", rand::thread_rng());
         Cocoon::parse_only(b"password");
     }
 
