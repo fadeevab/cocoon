@@ -13,9 +13,9 @@
 //!
 //! # Problem
 //!
-//! Every time you need to organize any kind of secure storage you need to
-//! re-invent the wheel: the way how to encrypt data, store random material, then get it back,
-//! parse, and decrypt data securely. Instead you can use [`Cocoon`].
+//! Every time you need a secure storage you re-invent the wheel: you have to take care
+//! how to encrypt data properly, how to store and transmit randomly generated
+//! buffers, then to get data back, parse, and decrypt securely. Instead you can use [`Cocoon`].
 //!
 //! # Basic Usage
 //!
@@ -96,6 +96,46 @@
 //!
 //! # Ok(())
 //! # }
+//! ```
+//!
+//! # Study Case
+//! You implement a database of secrets which must be stored to an encrypted file using a user
+//! password. There are a lot of ways how your database can be represented in memory and how
+//! it could be serialized. You handle these aspects on your own, e.g. you can use
+//! [`HashMap`](std::collections::HashMap) to manage data and use `borsh`, or `bincode`,
+//! to serialize the data. You can even compress serialized buffer before encryption.
+//!
+//! In the end you use [`Cocoon`] to put the final image into encrypted container.
+//!
+//! ```
+//! use borsh::BorshSerialize;
+//! use cocoon::{Cocoon, Error};
+//!
+//! use std::collections::HashMap;
+//! use std::fs::File;
+//!
+//! #[derive(BorshSerialize)]
+//! struct Database {
+//!     inner: HashMap<String, String>,
+//! }
+//!
+//! fn main() -> Result<(), Error> {
+//!     let mut file = File::create("target/doc/test.db")?;
+//!     let mut db = Database { inner: HashMap::new() };
+//!
+//!     db.inner.insert("my.email@example.com".to_string(), "eKPV$PM8TV5A2".to_string());
+//!
+//!     let encoded = db.try_to_vec().unwrap();
+//!
+//!     // Don't use the hard-coded password in the real life!
+//!     // It could be a user-supplied password.
+//!     let cocoon = Cocoon::new(b"secret password");
+//!
+//!     // Dump serialized database into file as an encrypted container.
+//!     let container = cocoon.dump(encoded, &mut file)?;
+//!
+//!     Ok(())
+//! }
 //! ```
 //!
 //! # Crate Features
