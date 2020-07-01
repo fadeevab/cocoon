@@ -1,7 +1,9 @@
 //! # Cocoon
 //!
+//! <img alt="Cocoon container format" src="../../../images/cocoon_format.svg" />
+//!
 //! [`Cocoon`] is a protected container to wrap sensitive data with a strong
-//! [encryption](#cryptography) and format validation. A [format](#format) of [`Cocoon`]
+//! [encryption](#cryptography) and format validation. A format of [`Cocoon`]
 //! is developed for the following practical cases:
 //!
 //! 1. As a _file format_ to organize a simple secure storage:
@@ -47,7 +49,7 @@
 //! 📌 [`dump`](Cocoon::dump)/[`parse`](Cocoon::parse)
 //!
 //! You can store data to file. Put data into [`Vec`] container, the data is going to be
-//! encrypted _in place_ and stored in a file using the "cocoon" [format](#format).
+//! encrypted _in place_ and stored in a file using the "cocoon" [format](#cocoon).
 //! ```
 //! # use cocoon::{Cocoon, Error};
 //! # use std::io::Cursor;
@@ -164,10 +166,6 @@
 //! [dependencies]
 //! cocoon = { version = "0", default-features = false, features = ['alloc'] }
 //! ```
-//!
-//! # Format
-//!
-//! <img alt="Cocoon container format" src="../../../images/cocoon_format.svg" />
 //!
 //! # Cryptography
 //!

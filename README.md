@@ -1,7 +1,9 @@
 # Cocoon
 
+<img alt="Cocoon container format" src="images/cocoon_format.svg" />
+
 `Cocoon` is a protected container to wrap sensitive data with a strong
-[encryption](#cryptography) and format validation. A [format](#format) of `Cocoon` is developed
+[encryption](#cryptography) and format validation. A format of `Cocoon` is developed
 for the following practical cases:
 
 1. As a _file format_ to organize a simple secure storage:
@@ -40,7 +42,7 @@ assert_eq!(unwrapped, b"my secret data");
 📌 `dump`/`parse`
 
 You can store data to file. Put data into `Vec` container, the data is going to be
-encrypted _in place_ and stored in a file using the "cocoon" [format](#format).
+encrypted _in place_ and stored in a file using the "cocoon" [format](#cocoon).
 ```rust
 let mut data = b"my secret data".to_vec();
 let cocoon = Cocoon::new(b"password");
@@ -108,10 +110,6 @@ fn main() -> Result<(), Error> {
     Ok(())
 }
 ```
-
-# Format
-
-<img alt="Cocoon container format" src="images/cocoon_format.svg" />
 
 # Cryptography
 
