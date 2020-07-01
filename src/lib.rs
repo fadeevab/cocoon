@@ -1,8 +1,8 @@
 //! # Cocoon
 //!
 //! [`Cocoon`] is a protected container to wrap sensitive data with a strong
-//! [encryption](#cryptography) and format validation. A format of [`Cocoon`] is developed
-//! for the following practical cases:
+//! [encryption](#cryptography) and format validation. A [format](#format) of [`Cocoon`]
+//! is developed for the following practical cases:
 //!
 //! 1. As a _file format_ to organize a simple secure storage:
 //!    1. Key store.
@@ -13,7 +13,7 @@
 //!
 //! # Problem
 //!
-//! Every time you need a secure storage you re-invent the wheel: you have to take care
+//! Every time when you need a secure storage you re-invent the wheel: you have to take care
 //! how to encrypt data properly, how to store and transmit randomly generated
 //! buffers, then to get data back, parse, and decrypt securely. Instead you can use [`Cocoon`].
 //!
@@ -171,16 +171,20 @@
 //!
 //! # Cryptography
 //!
-//! [`Cocoon`] is based on 256-bit cryptography.
+//! 256-bit cryptography is chosen as a `Cocoon` baseline.
 //!
 //! | Cipher (AEAD)     | Key Derivation Function (KDF)    |
 //! |-------------------|----------------------------------|
 //! | Chacha20-Poly1305 | PBKDF2-SHA256: 100000 iterations |
 //! | AES256-GCM        |                                  |
 //!
-//! * Keys: 256-bit.
-//! * Random salt for KDF: 128-bit.
-//! * Random nonce for encryption: 96-bit.
+//! * Key: 256-bit.
+//! * Salt for KDF: random 128-bit + predefined part.
+//! * Nonce for encryption: random 96-bit.
+//!
+//! Key derivation parameters comply with NIST SP 800-132 recommendations (salt, iterations),
+//! and cipher parameters (key, nonce) fit requirements of a particular cipher.
+//! AEAD is chosen in order to authenticate an encrypted data together with an unencrypted header.
 //!
 //! # Container Creation
 //! First, a random material is generated. A _salt_ is going to get mixed into a
