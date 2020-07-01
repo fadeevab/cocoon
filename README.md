@@ -1,6 +1,6 @@
 # Cocoon
 
-<img alt="Cocoon container format" src="images/cocoon_format.svg" />
+<img alt="Cocoon format" src="https://github.com/fadeevab/cocoon/raw/master/images/cocoon_format.svg" />
 
 `Cocoon` is a protected container to wrap sensitive data with a strong
 [encryption](#cryptography) and format validation. A format of `Cocoon` is developed
