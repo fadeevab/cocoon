@@ -348,7 +348,7 @@ mod test {
                 Err(e) => match e {
                     Error::UnrecognizedFormat => (),
                     _ => panic!("Invalid error, expected Error::UnrecognizedFormat"),
-                }
+                },
             }
         }
 
