@@ -130,6 +130,11 @@ Key derivation parameters comply with NIST SP 800-132 recommendations (salt, ite
 and cipher parameters (key, nonce, length) fit requirements of a particular cipher.
 AEAD is chosen in order to authenticate an encrypted data together with an unencrypted header.
 
+# Zeroization
+
+Encryption key is wrapped into zeroizing container
+(provided by `zeroize` crate), which means that the key is erased automatically once it is dropped.
+
 # How It Works
 
 See more implementation details on

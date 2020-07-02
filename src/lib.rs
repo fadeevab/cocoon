@@ -184,6 +184,11 @@
 //! and cipher parameters (key, nonce) fit requirements of a particular cipher.
 //! AEAD is chosen in order to authenticate an encrypted data together with an unencrypted header.
 //!
+//! # Zeroization
+//!
+//! Encryption key is wrapped into zeroizing container
+//! (provided by `zeroize` crate), which means that the key is erased automatically once it is dropped.
+//!
 //! # Container Creation
 //! First, a random material is generated. A _salt_ is going to get mixed into a
 //! master key, and a _nonce_ is used for AEAD encryption. All arrays are put
