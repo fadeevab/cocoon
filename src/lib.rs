@@ -122,7 +122,7 @@
 //! }
 //!
 //! fn main() -> Result<(), Error> {
-//!     let mut file = File::create("target/doc/test.db")?;
+//!     let mut file = File::create("target/test.db")?;
 //!     let mut db = Database { inner: HashMap::new() };
 //!
 //!     db.inner.insert("my.email@example.com".to_string(), "eKPV$PM8TV5A2".to_string());
