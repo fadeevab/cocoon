@@ -1,5 +1,5 @@
 [![crates.io](https://img.shields.io/crates/v/cocoon.svg)](https://crates.io/crates/cocoon)
-[![docs.rs](https://docs.rs/cocoon/badge.svg)](https://docs.rs/crate/cocoon/)
+[![docs.rs](https://docs.rs/cocoon/badge.svg)](https://docs.rs/cocoon/)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/fadeevab/cocoon/LICENSE)
 
 # Cocoon
@@ -25,13 +25,12 @@ buffers, then to get data back, parse, and decrypt securely. Instead you can use
 
 # Basic Usage
 
-## Wrap/Unwrap
+## 📌 Wrap/Unwrap
 
 One party wraps a private data into a container using `Cocoon::wrap`.
 Another party (or the same one, or whoever knows the password) unwraps a private data
 out of the container using `Cocoon::unwrap`.
 
-📌 `wrap`/`unwrap`
 ```rust
 let cocoon = Cocoon::new(b"password");
 
@@ -42,8 +41,7 @@ let unwrapped = cocoon.unwrap(&wrapped)?;
 assert_eq!(unwrapped, b"my secret data");
 ```
 
-## Dump/Parse
-📌 `dump`/`parse`
+## 📌 Dump/Parse
 
 You can store data to file. Put data into `Vec` container, the data is going to be
 encrypted _in place_ and stored in a file using the "cocoon" [format](#cocoon).
@@ -57,8 +55,7 @@ let data = cocoon.parse(&mut file)?;
 assert_eq!(&data, b"my secret data");
 ```
 
-## Encrypt/Decrypt
-📌 `encrypt`/`decrypt`
+## 📌 Encrypt/Decrypt
 
 You can encrypt data in place and avoid re-allocations. The method operates with a detached
 meta-data (a container format prefix) in the array on the stack. It is suitable for "`no_std`"
@@ -131,3 +128,11 @@ fn main() -> Result<(), Error> {
 Key derivation parameters comply with NIST SP 800-132 recommendations (salt, iterations),
 and cipher parameters (key, nonce, length) fit requirements of a particular cipher.
 AEAD is chosen in order to authenticate an encrypted data together with an unencrypted header.
+
+# How It Works
+
+See more implementation details on
+[![docs.rs](https://docs.rs/cocoon/badge.svg)](https://docs.rs/cocoon/), e.g.
+1. the process of [container creation](https://docs.rs/cocoon/#container-creation),
+2. customizable [crate features](https://docs.rs/cocoon/#crate-features),
+3. and of course [API](https://docs.rs/cocoon/#cocoon).
