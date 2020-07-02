@@ -334,4 +334,29 @@ mod test {
         assert_eq!(header.data_length(), 50);
         assert_eq!(header.version(), CocoonVersion::Version1);
     }
+
+    #[test]
+    fn header_deserialize_modified() {
+        let header = CocoonHeader::new(CocoonConfig::default(), [1; 16], [2; 12], 50);
+
+        // Corrupt header: one byte per time.
+        for i in 0..7 {
+            let mut header = header.serialize();
+            header[i] = 0xff;
+            match CocoonHeader::deserialize(&header) {
+                Ok(_) => panic!("Header must not be deserialized on byte #{}", i),
+                Err(e) => match e {
+                    Error::UnrecognizedFormat => (),
+                    _ => panic!("Invalid error, expected Error::UnrecognizedFormat"),
+                }
+            }
+        }
+
+        // Corrupt header: reserved byte is ignored, and random data and length can be any.
+        for i in 7..CocoonHeader::SIZE {
+            let mut header = header.serialize();
+            header[i] = 0xff;
+            CocoonHeader::deserialize(&header).expect("Header must be serialized");
+        }
+    }
 }
