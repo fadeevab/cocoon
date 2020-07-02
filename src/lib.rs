@@ -22,12 +22,12 @@
 //! # Basic Usage
 //!
 //! ## Wrap/Unwrap
+//! 📌 [`wrap`](Cocoon::wrap)/[`unwrap`](Cocoon::unwrap)
 //!
 //! One party wraps a private data into a container using [`Cocoon::wrap`].
 //! Another party (or the same one, or whoever knows the password) unwraps a private data
 //! out of the container using [`Cocoon::unwrap`].
 //!
-//! 📌 [`wrap`](Cocoon::wrap)/[`unwrap`](Cocoon::unwrap)
 //! ```
 //! # use cocoon::{Cocoon, Error};
 //! #
