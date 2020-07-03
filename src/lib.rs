@@ -281,6 +281,24 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 
 /// Stores data securely inside of encrypted container.
 ///
+/// # Basic Usage
+/// ```
+/// # use cocoon::{Cocoon, Error};
+/// #
+/// # fn main() -> Result<(), Error> {
+/// let cocoon = Cocoon::new(b"password");
+/// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+///
+/// let wrapped = cocoon.wrap(b"my secret data")?;
+/// assert_ne!(&wrapped, b"my secret data");
+///
+/// let unwrapped = cocoon.unwrap(&wrapped)?;
+/// assert_eq!(unwrapped, b"my secret data");
+///
+/// # Ok(())
+/// # }
+/// ```
+///
 /// # Default Configuration
 /// | Option                      | Value                          |
 /// |-----------------------------|--------------------------------|
