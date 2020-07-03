@@ -102,7 +102,7 @@ fn main() -> Result<(), Error> {
 
     let encoded = db.try_to_vec().unwrap();
 
-    // Don't use the hard-coded password in the real life!
+    // Don't use hard-coded password in real life!
     // It could be a user-supplied password.
     let cocoon = Cocoon::new(b"secret password");
 
