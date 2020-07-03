@@ -2,11 +2,11 @@
 //!
 //! <img alt="Cocoon format" src="https://github.com/fadeevab/cocoon/raw/master/images/cocoon_format.svg" />
 //!
-//! [`Cocoon`] is a protected container to wrap sensitive data with a strong
+//! [`Cocoon`] is a protected container to wrap sensitive data with strong
 //! [encryption](#cryptography) and format validation. A format of [`Cocoon`]
 //! is developed for the following practical cases:
 //!
-//! 1. As a _file format_ to organize a simple secure storage:
+//! 1. As a _file format_ to organize simple secure storage:
 //!    1. Key store.
 //!    2. Password store.
 //!    3. Sensitive data store.
@@ -15,16 +15,16 @@
 //!
 //! # Problem
 //!
-//! Every time when you need a secure storage you re-invent the wheel: you have to take care
+//! Whenever you need secure storage you re-invent the wheel: you have to take care of
 //! how to encrypt data properly, how to store and transmit randomly generated
-//! buffers, then to get data back, parse, and decrypt securely. Instead you can use [`Cocoon`].
+//! buffers, then to get data back, parse, and decrypt securely. Instead, you can use [`Cocoon`].
 //!
 //! # Basic Usage
 //!
 //! ## Wrap/Unwrap
 //! 📌 [`wrap`](Cocoon::wrap)/[`unwrap`](Cocoon::unwrap)
 //!
-//! One party wraps a private data into a container using [`Cocoon::wrap`].
+//! One party wraps private data into a container using [`Cocoon::wrap`].
 //! Another party (or the same one, or whoever knows the password) unwraps a private data
 //! out of the container using [`Cocoon::unwrap`].
 //!
@@ -78,7 +78,7 @@
 //! You can encrypt data in place and avoid re-allocations. The method operates with a detached
 //! meta-data (a container format prefix) in the array on the stack. It is suitable for "`no_std`"
 //! build and whenever you want to evade re-allocations of a huge amount of data. You have to care
-//! how to store and transfer a data length and a container prefix though.
+//! about how to store and transfer a data length and a container prefix though.
 //! ```
 //! # use cocoon::{Cocoon, Error};
 //! #
@@ -101,13 +101,13 @@
 //! ```
 //!
 //! # Study Case
-//! You implement a database of secrets which must be stored to an encrypted file using a user
+//! You implement a database of secrets that must be stored in an encrypted file using a user
 //! password. There are a lot of ways how your database can be represented in memory and how
 //! it could be serialized. You handle these aspects on your own, e.g. you can use
 //! [`HashMap`](std::collections::HashMap) to manage data and use `borsh`, or `bincode`,
-//! to serialize the data. You can even compress serialized buffer before encryption.
+//! to serialize the data. You can even compress a serialized buffer before encryption.
 //!
-//! In the end you use [`Cocoon`] to put the final image into encrypted container.
+//! In the end, you use [`Cocoon`] to put the final image into an encrypted container.
 //!
 //! ```
 //! use borsh::BorshSerialize;
@@ -133,7 +133,7 @@
 //!     // It could be a user-supplied password.
 //!     let cocoon = Cocoon::new(b"secret password");
 //!
-//!     // Dump serialized database into file as an encrypted container.
+//!     // Dump the serialized database into a file as an encrypted container.
 //!     let container = cocoon.dump(encoded, &mut file)?;
 //!
 //!     Ok(())
@@ -182,11 +182,11 @@
 //!
 //! Key derivation parameters comply with NIST SP 800-132 recommendations (salt, iterations),
 //! and cipher parameters (key, nonce) fit requirements of a particular cipher.
-//! AEAD is chosen in order to authenticate an encrypted data together with an unencrypted header.
+//! AEAD is chosen in order to authenticate encrypted data together with an unencrypted header.
 //!
 //! # Zeroization
 //!
-//! Encryption key is wrapped into zeroizing container
+//! The encryption key is wrapped into a zeroizing container
 //! (provided by `zeroize` crate), which means that the key is erased automatically once it is dropped.
 //!
 //! # Container Creation
@@ -299,6 +299,13 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 /// # }
 /// ```
 ///
+/// Currently [`Cocoon`] is not supposed to be used within the data types as a structure member.
+/// [`Cocoon`] doesn't clone a password, instead, it uses the reference and
+/// shares the password lifetime. Also [`Cocoon`] uses generics to evade dynamic dispatching and
+/// resolve variants at compile time, so it makes its declaration in structures a little bit tricky.
+/// A convenient way to declare [`Cocoon`] as a structure member _could be introduced_ once it's
+/// needed by semantic, e.g. with introducing of KDF caching.
+///
 /// # Default Configuration
 /// | Option                      | Value                          |
 /// |-----------------------------|--------------------------------|
@@ -316,7 +323,7 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 /// # Features and Methods Mapping
 ///
 /// _Note: This is a not complete list of API methods. Please, refer to the current
-/// documentation below to get familiarized with the full set of the methods._
+/// documentation below to get familiarized with the full set of methods._
 ///
 /// | Method ↓ / Feature →        | `std` | `alloc` | "no_std" |
 /// |-----------------------------|:-----:|:-------:|:--------:|
@@ -370,7 +377,7 @@ impl<'a> Cocoon<'a, StdRng, Creation> {
     /// Creates a new [`Cocoon`] seeding a random generator using the given buffer.
     ///
     /// * `password` - a shared reference to a password
-    /// * `seed` - 32 bytes of a random seed obtained from external RNG
+    /// * `seed` - 32 bytes of a random seed obtained from an external RNG
     ///
     /// This method can be used when [`ThreadRng`] is not accessible with no [`std`].
     ///
@@ -416,7 +423,7 @@ impl<'a> Cocoon<'a, StdRng, Creation> {
     /// ```
     ///
     /// # References
-    /// Also see [`Cocoon::from_crypto_rng`] which doesn't fail.
+    /// Also, see [`Cocoon::from_crypto_rng`] which doesn't fail.
     pub fn from_rng<R: RngCore>(password: &'a [u8], rng: R) -> Result<Self, rand::Error> {
         Ok(Cocoon {
             password,
@@ -460,7 +467,7 @@ impl<'a> Cocoon<'a, NoRng, Parsing> {
     /// * `password` - a shared reference to a password
     ///
     /// All encryption methods need a cryptographic random generator to generate a salt and a nonce,
-    /// at the same time random generator is not needed for parsing.
+    /// at the same time the random generator is not needed for parsing.
     ///
     /// The [`wrap`](Cocoon::wrap)/[`encrypt`](Cocoon::encrypt)/[`dump`](Cocoon::dump) methods are
     /// **not** accessible _at compile time_ when [`Cocoon::parse_only`] is used. Therefore the
@@ -474,7 +481,7 @@ impl<'a> Cocoon<'a, NoRng, Parsing> {
     /// cocoon.wrap(b"my data");
     /// ```
     ///
-    /// Meanwhile decryption methods are accessible.
+    /// Meanwhile, decryption methods are accessible.
     /// ```should_panic
     /// use cocoon::{Cocoon, Error};
     ///
@@ -542,10 +549,10 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
         self
     }
 
-    /// Reduces a number of iterations for key derivation function (KDF).
+    /// Reduces the number of iterations for key derivation function (KDF).
     ///
     /// ⚠️ This modifier could be used for testing in debug mode, and it should not be used
-    /// in a production and release builds.
+    /// in production and release builds.
     ///
     /// # Examples
     /// ```
