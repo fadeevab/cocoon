@@ -331,9 +331,14 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 /// try to use it in debug build only.
 /// ```
 /// # use cocoon::Cocoon;
-/// if cfg!(debug_assertions) {
-///    let cocoon = Cocoon::new(b"password").with_weak_kdf();
-/// }
+/// // Attention: don't use a weak password in real life!
+/// let password = [1, 2, 3, 4, 5, 6];
+///
+/// let mut cocoon = if cfg!(debug_assertions) {
+///     Cocoon::new(&password).with_weak_kdf()
+/// } else {
+///     Cocoon::new(&password)
+/// };
 /// ```
 ///
 /// # Using As a Struct Field
