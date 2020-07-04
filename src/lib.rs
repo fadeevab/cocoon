@@ -304,10 +304,44 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 /// # }
 /// ```
 ///
-/// Currently [`Cocoon`] is not supposed to be used within the data types as a structure member.
-/// [`Cocoon`] doesn't clone a password, instead, it uses the reference and
-/// shares the password lifetime. Also [`Cocoon`] uses generics to evade dynamic dispatching and
-/// resolve variants at compile time, so it makes its declaration in structures a little bit tricky.
+/// Scroll down to [Features and Methods Mapping](#features-and-methods-mapping), and also see
+/// crate's documentation for more use cases.
+///
+/// # Optimization
+///
+/// Whenever a new container is created a new encryption key is generated from a supplied password
+/// using Key Derivation Function (KDF). By default, PBKDF2 is used with 100 000 iterations of
+/// SHA256. The reason for that is security: slower KDF - slower attacker brute-forces the password.
+/// However, you may find it a bit _slow_ for debugging during _development_. If you experience
+/// a slower runtime, try to use one of the two approaches to speed it up.
+///
+/// ## Optimize Both `cocoon` And `sha2`
+/// Add these lines to `Cargo.toml`:
+/// ```toml
+/// [profile.dev.package.cocoon]
+/// opt-level = 3
+///
+/// [profile.dev.package.sha2]
+/// opt-level = 3
+/// ```
+///
+/// ## Use Less KDF Iterations
+/// You can configure [`Cocoon`] to use fewer iterations for KDF with [`Cocoon::with_weak_kdf`].
+/// Be careful, lower count of KDF iterations generate a _**weaker** encryption key_, therefore
+/// try to use it in debug build only.
+/// ```
+/// # use cocoon::Cocoon;
+/// if cfg!(debug_assertions) {
+///    let cocoon = Cocoon::new(b"password").with_weak_kdf();
+/// }
+/// ```
+///
+/// # Using As a Struct Field
+///
+/// Currently, [`Cocoon`] is not supposed to be used within the data types as a structure member.
+/// [`Cocoon`] doesn't clone a password, instead, it uses a password reference and
+/// shares its lifetime. Also, [`Cocoon`] uses generics to evade dynamic dispatching and
+/// resolve variants at compile-time, so it makes its declaration in structures a little bit tricky.
 /// A convenient way to declare [`Cocoon`] as a structure member _could be introduced_ once it's
 /// needed by semantic, e.g. with introducing of KDF caching.
 ///
@@ -466,7 +500,7 @@ impl<'a> Cocoon<'a, StdRng, Creation> {
 
 impl<'a> Cocoon<'a, NoRng, Parsing> {
     /// Creates a [`Cocoon`] instance allowing to only decrypt a container. It makes only decryption
-    /// methods accessible at compile time: [`Cocoon::unwrap`], [`Cocoon::parse`] and
+    /// methods accessible at compile-time: [`Cocoon::unwrap`], [`Cocoon::parse`] and
     /// [`Cocoon::decrypt`].
     ///
     /// * `password` - a shared reference to a password
@@ -475,7 +509,7 @@ impl<'a> Cocoon<'a, NoRng, Parsing> {
     /// at the same time the random generator is not needed for parsing.
     ///
     /// The [`wrap`](Cocoon::wrap)/[`encrypt`](Cocoon::encrypt)/[`dump`](Cocoon::dump) methods are
-    /// **not** accessible _at compile time_ when [`Cocoon::parse_only`] is used. Therefore the
+    /// **not** accessible _at compile-time_ when [`Cocoon::parse_only`] is used. Therefore the
     /// compilation of the following code snippet fails.
     /// ```compile_fail
     /// use cocoon::Cocoon;
