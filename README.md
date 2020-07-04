@@ -89,19 +89,24 @@ use cocoon::{Cocoon, Error};
 use std::collections::HashMap;
 use std::fs::File;
 
+// Your data can be represented in any way.
 #[derive(BorshSerialize)]
 struct Database {
     inner: HashMap<String, String>,
 }
 
 fn main() -> Result<(), Error> {
-    let mut file = File::create("target/doc/test.db")?;
+    let mut file = File::create("target/test.db")?;
     let mut db = Database { inner: HashMap::new() };
 
+    // Over time you collect some kind of data.
     db.inner.insert("my.email@example.com".to_string(), "eKPV$PM8TV5A2".to_string());
 
+    // You can choose how to serialize data. Also, you can compress it.
     let encoded = db.try_to_vec().unwrap();
 
+    // Finally, you want to store your data secretly.
+    // Supply some password to Cocoon: password is any byte array, basically.
     // Don't use a hard-coded password in real life!
     // It could be a user-supplied password.
     let cocoon = Cocoon::new(b"secret password");
