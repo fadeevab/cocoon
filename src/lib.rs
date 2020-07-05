@@ -13,16 +13,16 @@
 //! 2. For _encrypted data transfer_:
 //!    * As a secure in-memory container.
 //!
+//! [`Cocoon`] is developed with security in mind. It aims to do the only one thing and do it
+//! flawlessly. It has a minimal set of dependencies and a minimalist design to simplify control
+//! over security aspects. It's a pure Rust implementation, and all dependencies are pure Rust
+//! packages with disabled default features.
+//!
 //! # Problem
 //!
 //! Whenever you need secure storage you reinvent the wheel: you have to take care of
 //! how to encrypt data properly, how to store and transmit randomly generated
 //! buffers, then to get data back, parse, and decrypt securely. Instead, you can use [`Cocoon`].
-//!
-//! [`Cocoon`] is developed with security in mind. It aims to do the only one thing and do it
-//! flawlessly. It has a minimal set of dependencies and a minimalist design to simplify control
-//! over security aspects. It's a pure Rust implementation, and all dependencies are pure Rust
-//! packages with disabled default features.
 //!
 //! # Basic Usage
 //!
