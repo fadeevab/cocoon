@@ -6,7 +6,7 @@
 //! [encryption](#cryptography) and format validation. A format of [`Cocoon`]
 //! is developed for the following practical cases:
 //!
-//! 1. As a _file format_ to organize simple secure storage:
+//! 1. As an _encrypted file format_ to organize simple secure storage:
 //!    1. Key store.
 //!    2. Password store.
 //!    3. Sensitive data store.

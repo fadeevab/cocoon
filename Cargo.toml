@@ -1,11 +1,11 @@
 [package]
 name = "cocoon"
-version = "0.1.9"
+version = "0.1.10"
 description = "A simple protected container with strong encryption and format validation."
 authors = ["Alexander Fadeev <fadeevab.com@gmail.com>"]
 edition = "2018"
 license = "MIT"
-keywords = ["secure", "storage", "keystore", "wrapper", "container"]
+keywords = ["encryption", "storage", "keystore", "parser", "container"]
 categories = ["encoding", "no-std", "parser-implementations"]
 homepage = "https://github.com/fadeevab/cocoon"
 repository = "https://github.com/fadeevab/cocoon"
