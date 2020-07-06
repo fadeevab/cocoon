@@ -36,7 +36,7 @@ jobs:
           -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests
         RUSTDOCFLAGS: >-
           -Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code
-          -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests'
+          -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests
     - uses: actions-rs/grcov@v0.1
     - name: Send to Coveralls
       uses: coverallsapp/github-action@master
