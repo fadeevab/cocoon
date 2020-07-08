@@ -1,6 +1,13 @@
 name: Cocoon
 
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - master
+
+  pull_request:
+    branches:
+      - master
 
 jobs:
   build:
@@ -15,3 +22,34 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Select Rust nightly build
+      run: rustup default nightly
+    - name: Test with profiling
+      env:
+        CARGO_INCREMENTAL: 0
+        RUSTFLAGS: >-
+          -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code
+          -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
+        RUSTDOCFLAGS: >-
+          -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code
+          -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
+      run: cargo test --all-features
+    - name: Install grcov
+      run: |
+        curl -L https://github.com/mozilla/grcov/releases/latest/download/grcov-linux-x86_64.tar.bz2 \
+          | tar jxf -
+    - name: Run grcov
+      run: |
+        mkdir coverage
+        ./grcov ./target/debug/ -s . -t lcov --llvm --branch --ignore-not-existing --ignore "/*" \
+                --excl-line "#\[" --excl-br-line "#\[" -o ./coverage/lcov.info
+    - name: Send to Coveralls
+      uses: coverallsapp/github-action@master
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
