@@ -2,7 +2,7 @@
 [![crates.io](https://img.shields.io/crates/v/cocoon.svg)](https://crates.io/crates/cocoon)
 [![docs.rs](https://docs.rs/cocoon/badge.svg)](https://docs.rs/cocoon/)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/fadeevab/cocoon/LICENSE)
-[![coverage](https://coveralls.io/repos/github/fadeevab/cocoon/badge.svg?branch=master)](https://coveralls.io/github/fadeevab/cocoon?branch=coveralls)
+[![coverage](https://coveralls.io/repos/github/fadeevab/cocoon/badge.svg?branch=master)](https://coveralls.io/github/fadeevab/cocoon?branch=master)
 
 # Cocoon
 
