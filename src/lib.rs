@@ -927,6 +927,7 @@ impl RngCore for NoRng {
 #[cfg(test)]
 mod test {
     use std::io::Cursor;
+    use std::fs::File;
 
     use super::*;
 
@@ -1054,7 +1055,7 @@ mod test {
     }
 
     #[test]
-    fn cocoon_dump_wrap() {
+    fn cocoon_dump_parse() {
         let buf = vec![0; 100];
         let mut file = Cursor::new(buf);
         let cocoon = Cocoon::from_seed(b"password", [0; 32]).with_weak_kdf();
@@ -1070,5 +1071,24 @@ mod test {
 
         let original = cocoon.parse(&mut file).expect("Parsed container");
         assert_eq!(b"my data", original.as_slice());
+    }
+
+    #[test]
+    fn cocoon_dump_io_error() {
+        File::create("target/read_only.txt").expect("Test file");
+        let mut file = File::open("target/read_only.txt").expect("Test file");
+
+        let cocoon = Cocoon::from_seed(b"password", [0; 32]).with_weak_kdf();
+
+        // Prepare data inside of `Vec` container.
+        let data = b"my data".to_vec();
+
+        match cocoon.dump(data, &mut file) {
+            Err(e) => match e {
+                Error::Io(_) => (),
+                _ => panic!("Only unexpected I/O error is expected :)"),
+            },
+            _ => panic!("Success is not expected"),
+        }
     }
 }
