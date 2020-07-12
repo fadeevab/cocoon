@@ -48,7 +48,8 @@ jobs:
       run: |
         mkdir coverage
         ./grcov ./target/debug/ -s . -t lcov --llvm --branch --ignore-not-existing --ignore "/*" \
-                --excl-line "#\[" --excl-br-line "#\[" -o ./coverage/lcov.info
+                --excl-line '#\[|(=> panic!)|(unreachable!)' \
+                --excl-br-line '#\[|(=> panic!)|(unreachable!)' -o ./coverage/lcov.info
     - name: Send to Coveralls
       uses: coverallsapp/github-action@master
       with:
