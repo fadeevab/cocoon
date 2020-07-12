@@ -293,6 +293,23 @@ mod test {
     }
 
     #[test]
+    fn header_config_deserialize() {
+        let config = CocoonConfig::default().serialize();
+
+        for i in 0..3 {
+            match CocoonConfig::deserialize(&config[0..i]) {
+                Err(e) => match e {
+                    Error::UnrecognizedFormat => (),
+                    _ => panic!("Unexpected error, UnrecognizedFormat is expected only"),
+                },
+                _ => panic!("Success is not expected"),
+            }
+        }
+
+        CocoonConfig::deserialize(&config[0..4]).expect("Deserialized config");
+    }
+
+    #[test]
     fn header_new() {
         let header = CocoonHeader::new(CocoonConfig::default(), [0; 16], [0; 12], std::usize::MAX);
         assert_eq!(header.config(), &CocoonConfig::default());
