@@ -966,6 +966,31 @@ mod test {
     }
 
     #[test]
+    fn cocoon_encrypt_aes() {
+        let cocoon = Cocoon::from_seed(b"password", [0; 32])
+            .with_weak_kdf()
+            .with_cipher(CocoonCipher::Aes256Gcm);
+        let mut data = "my secret data".to_owned().into_bytes();
+
+        let detached_prefix = cocoon.encrypt(&mut data).unwrap();
+
+        assert_eq!(
+            &[
+                127, 192, 10, 1, 2, 1, 2, 0, 118, 184, 224, 173, 160, 241, 61, 144, 64, 93, 106,
+                229, 83, 134, 189, 40, 189, 210, 25, 184, 160, 141, 237, 26, 168, 54, 239, 204, 0,
+                0, 0, 0, 0, 0, 0, 14, 230, 4, 88, 25, 8, 123, 158, 104, 254, 48, 243, 181, 141,
+                186, 246, 88
+            ][..],
+            &detached_prefix[..]
+        );
+
+        assert_eq!(
+            &[242, 192, 42, 168, 172, 151, 141, 91, 27, 20, 124, 255, 150, 184],
+            &data[..]
+        );
+    }
+
+    #[test]
     fn cocoon_decrypt() {
         let detached_prefix = [
             127, 192, 10, 1, 1, 1, 1, 0, 118, 184, 224, 173, 160, 241, 61, 144, 64, 93, 106, 229,
