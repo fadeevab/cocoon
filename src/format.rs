@@ -108,6 +108,8 @@ impl FormatPrefix {
 mod test {
     use super::*;
 
+    use std::io::Cursor;
+
     use crate::{CocoonConfig, CocoonHeader};
 
     #[test]
@@ -130,7 +132,7 @@ mod test {
 
         CocoonHeader::new(CocoonConfig::default(), [0; 16], [0; 12], 0).serialize_into(&mut raw);
 
-        let prefix = FormatPrefix::deserialize(&raw).expect("Deserialized container's prefix");
+        FormatPrefix::deserialize(&raw).expect("Deserialized container's prefix");
 
         match FormatPrefix::deserialize(&raw[0..FormatPrefix::SERIALIZE_SIZE - 1]) {
             Err(err) => match err {
@@ -157,5 +159,41 @@ mod test {
             ][..],
             prefix.serialize(&tag)[..]
         );
+    }
+
+    #[test]
+    fn format_prefix_deserialize_from() {
+        let mut raw = [1u8; FormatPrefix::SERIALIZE_SIZE];
+
+        CocoonHeader::new(CocoonConfig::default(), [0; 16], [0; 12], 0).serialize_into(&mut raw);
+
+        let mut file = Cursor::new(&raw[..]);
+
+        FormatPrefix::deserialize_from(&mut file).expect("Deserialized prefix");
+
+        for i in 0..raw.len() - 1 {
+            let mut file = Cursor::new(&raw[0..i]);
+            match FormatPrefix::deserialize_from(&mut file) {
+                Err(_) => (),
+                _ => panic!("Short file cannot be deserialized"),
+            }
+        }
+    }
+
+    #[test]
+    fn format_prefix_bad_prefix() {
+        let raw = [1u8; FormatPrefix::SERIALIZE_SIZE];
+
+        match FormatPrefix::deserialize(&raw) {
+            Err(_) => (),
+            _ => panic!("Bad prefix is expected"),
+        }
+
+        let mut file = Cursor::new(&raw[..]);
+
+        match FormatPrefix::deserialize_from(&mut file) {
+            Err(_) => (),
+            _ => panic!("Bad prefix is expected"),
+        }
     }
 }
