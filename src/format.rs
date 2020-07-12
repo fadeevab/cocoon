@@ -126,9 +126,13 @@ mod test {
 
     #[test]
     fn format_prefix_short() {
-        let prefix = [1u8; MAX_SIZE];
+        let mut raw = [1u8; FormatPrefix::SERIALIZE_SIZE];
 
-        match FormatPrefix::deserialize(&prefix) {
+        CocoonHeader::new(CocoonConfig::default(), [0; 16], [0; 12], 0).serialize_into(&mut raw);
+
+        let prefix = FormatPrefix::deserialize(&raw).expect("Deserialized container's prefix");
+
+        match FormatPrefix::deserialize(&raw[0..FormatPrefix::SERIALIZE_SIZE - 1]) {
             Err(err) => match err {
                 Error::UnrecognizedFormat => (),
                 _ => panic!("Invalid error"),

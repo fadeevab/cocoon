@@ -1091,4 +1091,20 @@ mod test {
             _ => panic!("Success is not expected"),
         }
     }
+
+    #[test]
+    fn cocoon_parse_io_error() {
+        File::create("target/read_only.txt").expect("Test file");
+        let mut file = File::open("target/read_only.txt").expect("Test file");
+
+        let cocoon = Cocoon::from_seed(b"password", [0; 32]).with_weak_kdf();
+
+        match cocoon.parse(&mut file) {
+            Err(e) => match e {
+                Error::TooShort => (),
+                _ => panic!("TooShort is expected for an empty file"),
+            },
+            _ => panic!("Success is not expected"),
+        }
+    }
 }
