@@ -926,8 +926,8 @@ impl RngCore for NoRng {
 
 #[cfg(test)]
 mod test {
-    use std::io::Cursor;
     use std::fs::File;
+    use std::io::Cursor;
 
     use super::*;
 
