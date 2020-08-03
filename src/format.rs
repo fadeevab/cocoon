@@ -3,12 +3,15 @@ use std::io::Read;
 
 use super::{
     error::Error,
-    header::{CocoonHeader, CocoonVersion},
+    header::{CocoonHeader, CocoonVersion, MiniCocoonHeader},
 };
 
 const HEADER_SIZE: usize = CocoonHeader::SIZE;
 const TAG_SIZE: usize = 16;
 const MAX_SIZE: usize = HEADER_SIZE + TAG_SIZE;
+
+const MINI_HEADER_SIZE: usize = MiniCocoonHeader::SIZE;
+const MINI_SIZE: usize = MINI_HEADER_SIZE + TAG_SIZE;
 
 pub struct FormatPrefix {
     header: CocoonHeader,
@@ -104,13 +107,75 @@ impl FormatPrefix {
     }
 }
 
+pub struct MiniFormatPrefix {
+    header: MiniCocoonHeader,
+    raw: [u8; MINI_SIZE],
+}
+
+impl MiniFormatPrefix {
+    pub const SERIALIZE_SIZE: usize = MINI_SIZE;
+
+    pub fn new(header: MiniCocoonHeader) -> Self {
+        let mut raw = [0u8; MINI_SIZE];
+
+        header.serialize_into(&mut raw);
+
+        MiniFormatPrefix { header, raw }
+    }
+
+    pub fn serialize(mut self, tag: &[u8; TAG_SIZE]) -> [u8; Self::SERIALIZE_SIZE] {
+        self.raw[MINI_HEADER_SIZE..MINI_HEADER_SIZE + TAG_SIZE].copy_from_slice(tag);
+        self.raw
+    }
+
+    pub fn deserialize(start: &[u8]) -> Result<Self, Error> {
+        let header = MiniCocoonHeader::deserialize(&start)?;
+
+        let mut raw = [0u8; MINI_SIZE];
+
+        if start.len() < MINI_SIZE {
+            return Err(Error::UnrecognizedFormat);
+        }
+
+        raw[..MINI_HEADER_SIZE].copy_from_slice(&start[..MINI_HEADER_SIZE]);
+        raw[MINI_HEADER_SIZE..MINI_HEADER_SIZE + TAG_SIZE]
+            .copy_from_slice(&start[MINI_HEADER_SIZE..MINI_HEADER_SIZE + TAG_SIZE]);
+
+        Ok(MiniFormatPrefix { header, raw })
+    }
+
+    #[cfg(feature = "std")]
+    pub fn deserialize_from(reader: &mut impl Read) -> Result<Self, Error> {
+        let mut raw = [0u8; MINI_SIZE];
+
+        reader.read_exact(&mut raw[..MINI_HEADER_SIZE])?;
+        let header = MiniCocoonHeader::deserialize(&raw)?;
+
+        reader.read_exact(&mut raw[MINI_HEADER_SIZE..MINI_HEADER_SIZE + TAG_SIZE])?;
+
+        Ok(MiniFormatPrefix { header, raw, })
+    }
+
+    pub fn header(&self) -> &MiniCocoonHeader {
+        &self.header
+    }
+
+    pub fn prefix(&self) -> &[u8] {
+        &self.raw[..MINI_HEADER_SIZE]
+    }
+
+    pub fn tag(&self) -> &[u8] {
+        &self.raw[MINI_HEADER_SIZE..MINI_HEADER_SIZE + TAG_SIZE]
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
 
     use std::io::Cursor;
 
-    use crate::{CocoonConfig, CocoonHeader};
+    use crate::header::{CocoonConfig, CocoonHeader, MiniCocoonHeader};
 
     #[test]
     fn format_prefix_good() {
@@ -131,7 +196,6 @@ mod test {
         let mut raw = [1u8; FormatPrefix::SERIALIZE_SIZE];
 
         CocoonHeader::new(CocoonConfig::default(), [0; 16], [0; 12], 0).serialize_into(&mut raw);
-
         FormatPrefix::deserialize(&raw).expect("Deserialized container's prefix");
 
         match FormatPrefix::deserialize(&raw[0..FormatPrefix::SERIALIZE_SIZE - 1]) {
@@ -194,6 +258,54 @@ mod test {
         match FormatPrefix::deserialize_from(&mut file) {
             Err(_) => (),
             _ => panic!("Bad prefix is expected"),
+        }
+    }
+
+    #[test]
+    fn mini_format_prefix_good() {
+        const RANDOM_ADD: usize = 12;
+        let mut raw = [1u8; MiniFormatPrefix::SERIALIZE_SIZE + RANDOM_ADD];
+
+        MiniCocoonHeader::new([1; 12], 13).serialize_into(&mut raw);
+
+        let prefix = MiniFormatPrefix::deserialize(&raw).expect("Deserialized container's prefix");
+
+        assert_eq!(&raw[..MINI_HEADER_SIZE], prefix.prefix());
+        assert_eq!(&raw[MINI_HEADER_SIZE..MINI_HEADER_SIZE + TAG_SIZE], prefix.tag());
+    }
+
+    #[test]
+    fn mini_format_prefix_short() {
+        let mut raw = [1u8; MiniFormatPrefix::SERIALIZE_SIZE];
+
+        MiniCocoonHeader::new([1; 12], 13).serialize_into(&mut raw);
+        MiniFormatPrefix::deserialize(&raw).expect("Deserialized container's prefix");
+
+        match MiniFormatPrefix::deserialize(&raw[0..MiniFormatPrefix::SERIALIZE_SIZE - 1]) {
+            Err(err) => match err {
+                Error::UnrecognizedFormat => (),
+                _ => panic!("Invalid error"),
+            },
+            Ok(_) => panic!("Cocoon prefix has not to be parsed"),
+        };
+    }
+
+    #[test]
+    fn mini_format_prefix_deserialize_from() {
+        let mut raw = [1u8; MiniFormatPrefix::SERIALIZE_SIZE];
+
+        MiniCocoonHeader::new([1; 12], 13).serialize_into(&mut raw);
+
+        let mut file = Cursor::new(&raw[..]);
+
+        MiniFormatPrefix::deserialize_from(&mut file).expect("Deserialized prefix");
+
+        for i in 0..raw.len() - 1 {
+            let mut file = Cursor::new(&raw[0..i]);
+            match FormatPrefix::deserialize_from(&mut file) {
+                Err(_) => (),
+                _ => panic!("Short file cannot be deserialized"),
+            }
         }
     }
 }

@@ -250,6 +250,7 @@ mod error;
 mod format;
 mod header;
 mod kdf;
+mod mini;
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
@@ -288,6 +289,9 @@ pub struct Parsing;
 
 /// The size of the cocoon prefix which appears in detached form in [`Cocoon::encrypt`].
 pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
+
+/// Re-export all MiniCocoon stuff.
+pub use mini::*;
 
 /// Stores data securely inside of encrypted container.
 ///

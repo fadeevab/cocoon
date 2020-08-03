@@ -1,3 +1,6 @@
+pub const KEY_SIZE: usize = 32;
+pub const SALT_MIN_SIZE: usize = 16;
+
 /// A 256-bit key derived from a password using PBKDF2 (HMAC-SHA256) with guaranteed zeroization.
 pub mod pbkdf2 {
     use hmac::Hmac;
@@ -5,10 +8,12 @@ pub mod pbkdf2 {
     use sha2::Sha256;
     use zeroize::Zeroizing;
 
-    const KEY_SIZE: usize = 32;
+    use super::{KEY_SIZE, SALT_MIN_SIZE};
 
     /// Derives a 256-bit symmetric key from a byte array (password or another key) using PBKDF2.
     pub fn derive(salt: &[u8], password: &[u8], iterations: u32) -> Zeroizing<[u8; KEY_SIZE]> {
+        debug_assert!(salt.len() >= SALT_MIN_SIZE);
+
         // NIST SP 800-132 (PBKDF2) recommends to concatenate a constant purpose to the random part
         // in order to narrow down a key usage domain to the scope of the current application.
         // Salt = [constant string || random value].

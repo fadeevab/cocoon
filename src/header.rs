@@ -259,6 +259,69 @@ impl CocoonHeader {
     }
 }
 
+/// Header of the mini Cocoon.
+///
+/// | Field              | Length   | Value               | Notes                                  |
+/// |:-------------------|:---------|:--------------------|:---------------------------------------|
+/// | Random nonce       | 12 Bytes | <nonce>             | A nonce is used for AEAD encryption    |
+/// | Payload length     |  8 Bytes | <length>            | A length of encrypted (wrapped) data   |
+pub struct MiniCocoonHeader {
+    /// 12 bytes of a randomly generated nonce.
+    ///
+    /// A nonce is used to seed AEAD ciphers and to encrypt data. Nonce is not a secret value.
+    nonce: [u8; 12],
+    /// 8 bytes of data length at most.
+    ///
+    /// 64-bit of length allows to handle up to 256GB of Chacha20/AES256 cipher data.
+    length: usize,
+}
+
+impl MiniCocoonHeader {
+    pub const SIZE: usize = 20; // Don't use size_of::<Self>() here because of #[repr(Rust)].
+
+    pub fn new(nonce: [u8; 12], length: usize) -> Self {
+        MiniCocoonHeader { nonce, length }
+    }
+
+    pub fn data_length(&self) -> usize {
+        self.length
+    }
+
+    pub fn nonce(&self) -> &[u8] {
+        &self.nonce
+    }
+
+    #[cfg(test)]
+    pub fn serialize(&self) -> [u8; Self::SIZE] {
+        let mut buf = [0u8; Self::SIZE];
+        self.serialize_into(&mut buf);
+        buf
+    }
+
+    pub fn serialize_into(&self, buf: &mut [u8]) {
+        debug_assert!(buf.len() >= Self::SIZE);
+
+        buf[..12].copy_from_slice(&self.nonce);
+        buf[12..Self::SIZE].copy_from_slice(&self.length.to_be_bytes());
+    }
+
+    pub fn deserialize(buf: &[u8]) -> Result<Self, Error> {
+        if buf.len() < Self::SIZE {
+            return Err(Error::UnrecognizedFormat);
+        }
+
+        let mut nonce = [0u8; 12];
+        nonce.copy_from_slice(&buf[..12]);
+        let length = usize::from_be_bytes(
+            buf[12..Self::SIZE]
+                .try_into()
+                .map_err(|_| Error::TooLarge)?,
+        );
+
+        Ok(MiniCocoonHeader { nonce, length })
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -374,6 +437,47 @@ mod test {
             let mut header = header.serialize();
             header[i] = 0xff;
             CocoonHeader::deserialize(&header).expect("Header must be serialized");
+        }
+    }
+
+    #[test]
+    fn mini_header_new() {
+        let header = MiniCocoonHeader::new([1; 12], std::usize::MAX);
+        assert_eq!(header.nonce(), [1; 12]);
+        assert_eq!(header.data_length(), std::usize::MAX);
+    }
+
+    #[test]
+    fn mini_header_serialize() {
+        let header = MiniCocoonHeader::new([2; 12], std::usize::MAX);
+
+        assert_eq!(
+            header.serialize()[..],
+            [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 255, 255, 255, 255, 255, 255, 255, 255][..]
+        );
+    }
+
+    #[test]
+    fn mini_header_deserialize() {
+        let header = MiniCocoonHeader::new([2; 12], 50);
+        let header = match MiniCocoonHeader::deserialize(&header.serialize()) {
+            Ok(h) => h,
+            Err(e) => panic!("Cannot deserialize serialized: {:?}", e),
+        };
+
+        assert_eq!(header.nonce(), [2; 12]);
+        assert_eq!(header.data_length(), 50);
+    }
+
+    #[test]
+    fn mini_header_deserialize_modified() {
+        let header = MiniCocoonHeader::new([2; 12], 50);
+
+        // Corrupt header: random data and length can be any.
+        for i in 0..MiniCocoonHeader::SIZE {
+            let mut header = header.serialize();
+            header[i] = 0xff;
+            MiniCocoonHeader::deserialize(&header).expect("Header must be serialized");
         }
     }
 }
