@@ -2,6 +2,7 @@ use aes_gcm::{
     aead::{generic_array::GenericArray, Aead, NewAead},
     Aes256Gcm,
 };
+use chacha20poly1305::ChaCha20Poly1305;
 
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 #[cfg(feature = "std")]
@@ -11,7 +12,7 @@ use zeroize::Zeroizing;
 use super::{
     error::Error,
     format::MiniFormatPrefix,
-    header::{CocoonConfig, CocoonKdf, MiniCocoonHeader},
+    header::{CocoonCipher, CocoonConfig, CocoonKdf, MiniCocoonHeader},
     kdf::{self, KEY_SIZE},
 };
 
@@ -22,6 +23,7 @@ pub const MINI_PREFIX_SIZE: usize = MiniFormatPrefix::SERIALIZE_SIZE;
 pub struct MiniCocoon {
     key: Zeroizing<[u8; KEY_SIZE]>,
     rng: StdRng,
+    config: CocoonConfig,
 }
 
 /// Stores data securely inside of a simple encrypted container ("mini cocoon").
@@ -156,7 +158,11 @@ impl MiniCocoon {
         let key = Zeroizing::new(k);
         let rng = StdRng::from_seed(s);
 
-        MiniCocoon { key, rng }
+        MiniCocoon {
+            key,
+            rng,
+            config: CocoonConfig::default(),
+        }
     }
 
     /// Creates a new [`MiniCocoon`] with a password. Under the hood, an encryption key is created
@@ -187,7 +193,25 @@ impl MiniCocoon {
 
         let rng = StdRng::from_seed(s);
 
-        MiniCocoon { key, rng }
+        MiniCocoon { key, rng, config }
+    }
+
+    /// Sets an encryption algorithm to wrap data on.
+    ///
+    /// # Examples
+    /// ```
+    /// use cocoon::{MiniCocoon, CocoonCipher};
+    /// use rand::Rng;
+    ///
+    /// let seed = rand::thread_rng().gen::<[u8; 32]>();
+    /// let key = rand::thread_rng().gen::<[u8; 32]>();
+    ///
+    /// let cocoon = MiniCocoon::from_key(&key, &seed).with_cipher(CocoonCipher::Chacha20Poly1305);
+    /// cocoon.wrap(b"my secret data");
+    /// ```
+    pub fn with_cipher(mut self, cipher: CocoonCipher) -> Self {
+        self.config = self.config.with_cipher(cipher);
+        self
     }
 
     /// Wraps data to an encrypted container.
@@ -303,9 +327,15 @@ impl MiniCocoon {
         let nonce = GenericArray::from_slice(&nonce);
         let key = GenericArray::clone_from_slice(self.key.as_ref());
 
-        let tag: [u8; 16] = {
-            let cipher = Aes256Gcm::new(key);
-            cipher.encrypt_in_place_detached(nonce, &prefix.prefix(), data)
+        let tag: [u8; 16] = match self.config.cipher() {
+            CocoonCipher::Chacha20Poly1305 => {
+                let cipher = ChaCha20Poly1305::new(key);
+                cipher.encrypt_in_place_detached(nonce, &prefix.prefix(), data)
+            }
+            CocoonCipher::Aes256Gcm => {
+                let cipher = Aes256Gcm::new(key);
+                cipher.encrypt_in_place_detached(nonce, &prefix.prefix(), data)
+            }
         }
         .map_err(|_| Error::Cryptography)?
         .into();
@@ -447,10 +477,17 @@ impl MiniCocoon {
         let master_key = GenericArray::clone_from_slice(self.key.as_ref());
         let tag = GenericArray::from_slice(&detached_prefix.tag());
 
-        let cipher = Aes256Gcm::new(master_key);
-        cipher
-            .decrypt_in_place_detached(nonce, &detached_prefix.prefix(), data, tag)
-            .map_err(|_| Error::Cryptography)?;
+        match self.config.cipher() {
+            CocoonCipher::Chacha20Poly1305 => {
+                let cipher = ChaCha20Poly1305::new(master_key);
+                cipher.decrypt_in_place_detached(nonce, &detached_prefix.prefix(), data, tag)
+            }
+            CocoonCipher::Aes256Gcm => {
+                let cipher = Aes256Gcm::new(master_key);
+                cipher.decrypt_in_place_detached(nonce, &detached_prefix.prefix(), data, tag)
+            }
+        }
+        .map_err(|_| Error::Cryptography)?;
 
         Ok(())
     }
@@ -479,6 +516,28 @@ mod test {
         assert_eq!(
             &[
                 118, 184, 224, 173, 160, 241, 61, 144, 64, 93, 106, 229, 0, 0, 0, 0, 0, 0, 0, 14,
+                159, 31, 100, 63, 43, 219, 99, 46, 201, 213, 205, 233, 174, 235, 43, 24
+            ][..],
+            &detached_prefix[..]
+        );
+
+        assert_eq!(
+            &[224, 50, 239, 254, 30, 140, 44, 135, 217, 94, 127, 67, 78, 31],
+            &data[..]
+        );
+    }
+
+    #[test]
+    fn mini_cocoon_encrypt_aes() {
+        let cocoon =
+            MiniCocoon::from_password(b"password", &[0; 32]).with_cipher(CocoonCipher::Aes256Gcm);
+        let mut data = "my secret data".to_owned().into_bytes();
+
+        let detached_prefix = cocoon.encrypt(&mut data).unwrap();
+
+        assert_eq!(
+            &[
+                118, 184, 224, 173, 160, 241, 61, 144, 64, 93, 106, 229, 0, 0, 0, 0, 0, 0, 0, 14,
                 165, 83, 248, 230, 121, 148, 146, 253, 98, 153, 208, 174, 129, 31, 162, 13
             ][..],
             &detached_prefix[..]
@@ -493,13 +552,32 @@ mod test {
     #[test]
     fn mini_cocoon_decrypt() {
         let detached_prefix = [
+            118, 184, 224, 173, 160, 241, 61, 144, 64, 93, 106, 229, 0, 0, 0, 0, 0, 0, 0, 14, 159,
+            31, 100, 63, 43, 219, 99, 46, 201, 213, 205, 233, 174, 235, 43, 24,
+        ];
+        let mut data = [
+            224, 50, 239, 254, 30, 140, 44, 135, 217, 94, 127, 67, 78, 31,
+        ];
+        let cocoon = MiniCocoon::from_password(b"password", &[0; 32]);
+
+        cocoon
+            .decrypt(&mut data, &detached_prefix)
+            .expect("Decrypted data");
+
+        assert_eq!(b"my secret data", &data);
+    }
+
+    #[test]
+    fn mini_cocoon_decrypt_aes() {
+        let detached_prefix = [
             118, 184, 224, 173, 160, 241, 61, 144, 64, 93, 106, 229, 0, 0, 0, 0, 0, 0, 0, 14, 165,
             83, 248, 230, 121, 148, 146, 253, 98, 153, 208, 174, 129, 31, 162, 13,
         ];
         let mut data = [
             178, 119, 26, 64, 67, 5, 235, 21, 238, 150, 245, 172, 197, 114,
         ];
-        let cocoon = MiniCocoon::from_password(b"password", &[0; 32]);
+        let cocoon =
+            MiniCocoon::from_password(b"password", &[0; 32]).with_cipher(CocoonCipher::Aes256Gcm);
 
         cocoon
             .decrypt(&mut data, &detached_prefix)
@@ -513,7 +591,7 @@ mod test {
         let cocoon = MiniCocoon::from_password(b"password", &[0; 32]);
         let wrapped = cocoon.wrap(b"data").expect("Wrapped container");
 
-        assert_eq!(wrapped[wrapped.len() - 4..], [187, 111, 78, 82]);
+        assert_eq!(wrapped[wrapped.len() - 4..], [233, 42, 187, 236]);
     }
 
     #[test]
@@ -564,7 +642,8 @@ mod test {
         let mut data = [
             178, 119, 26, 64, 67, 5, 235, 21, 238, 150, 245, 172, 197, 114, 0,
         ];
-        let cocoon = MiniCocoon::from_password(b"password", &[0; 32]);
+        let cocoon =
+            MiniCocoon::from_password(b"password", &[0; 32]).with_cipher(CocoonCipher::Aes256Gcm);
 
         cocoon
             .decrypt(&mut data, &detached_prefix)
