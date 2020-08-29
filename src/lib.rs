@@ -2,8 +2,8 @@
 //!
 //! <img alt="Cocoon format" src="https://github.com/fadeevab/cocoon/raw/master/images/cocoon_format.svg" />
 //!
-//! [`Cocoon`] is a protected container to wrap sensitive data with strong
-//! [encryption](#cryptography) and format validation. A format of [`Cocoon`]
+//! [`MiniCocoon`] and [`Cocoon`] are protected containers to wrap sensitive data with strong
+//! [encryption](#cryptography) and format validation. A format of [`MiniCocoon`] and [`Cocoon`]
 //! is developed for the following practical cases:
 //!
 //! 1. As an _encrypted file format_ to organize simple secure storage:
@@ -13,32 +13,36 @@
 //! 2. For _encrypted data transfer_:
 //!    * As a secure in-memory container.
 //!
-//! [`Cocoon`] is developed with security in mind. It aims to do the only one thing and do it
+//! Cocoon is developed with security in mind. It aims to do the only one thing and do it
 //! flawlessly. It has a minimal set of dependencies and a minimalist design to simplify control
 //! over security aspects. It's a pure Rust implementation, and all dependencies are pure Rust
 //! packages with disabled default features.
 //!
 //! # Problem
 //!
-//! Whenever you need secure storage you reinvent the wheel: you have to take care of
-//! how to encrypt data properly, how to store and transmit randomly generated
-//! buffers, then to get data back, parse, and decrypt securely. Instead, you can use [`Cocoon`].
+//! Whenever you need to transmit and store data securely you reinvent the wheel: you have to
+//! take care of how to encrypt data properly, how to handle randomly generated buffers,
+//! then how to get data back, parse, and decrypt. Instead, you can use [`MiniCocoon`]
+//! and [`Cocoon`].
 //!
 //! # Basic Usage
 //!
 //! ## Wrap/Unwrap
-//! 📌 [`wrap`](Cocoon::wrap)/[`unwrap`](Cocoon::unwrap)
+//! 📌 [`wrap`](MiniCocoon::wrap)/[`unwrap`](MiniCocoon::unwrap)
 //!
-//! One party wraps private data into a container using [`Cocoon::wrap`].
-//! Another party (or the same one, or whoever knows the password) unwraps a private data
-//! out of the container using [`Cocoon::unwrap`].
+//! One party wraps private data into a container using [`MiniCocoon::wrap`].
+//! Another party (or the same one, or whoever knows the key) unwraps data
+//! out of the container using [`MiniCocoon::unwrap`].
+//!
+//! [`MiniCocoon`] is preferred against [`Cocoon`] in a case of simple data transfer
+//! because it generates a container with a smaller header without version control, and also
+//! it allows to wrap data sequentially without performance drop of KDF calculation.
 //!
 //! ```
-//! # use cocoon::{Cocoon, Error};
+//! # use cocoon::{MiniCocoon, Error};
 //! #
 //! # fn main() -> Result<(), Error> {
-//! let cocoon = Cocoon::new(b"password");
-//! # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+//! let cocoon = MiniCocoon::from_key(b"0123456789abcdef0123456789abcdef", &[0; 32]);
 //!
 //! let wrapped = cocoon.wrap(b"my secret data")?;
 //! assert_ne!(&wrapped, b"my secret data");
@@ -55,6 +59,9 @@
 //!
 //! You can store data to file. Put data into [`Vec`] container, the data is going to be
 //! encrypted _in place_ and stored in a file using the "cocoon" [format](#cocoon).
+//!
+//! [`Cocoon`] is preferred as a long-time data storage, it has an extended header with a magic
+//! number, options, and version control.
 //! ```
 //! # use cocoon::{Cocoon, Error};
 //! # use std::io::Cursor;
@@ -78,22 +85,22 @@
 //! ```
 //!
 //! ## Encrypt/Decrypt
-//! 📌 [`encrypt`](Cocoon::encrypt)/[`decrypt`](Cocoon::decrypt)
+//! 📌 [`encrypt`](MiniCocoon::encrypt)/[`decrypt`](MiniCocoon::decrypt)
 //!
 //! You can encrypt data in place and avoid re-allocations. The method operates with a detached
 //! meta-data (a container format prefix) in the array on the stack. It is suitable for "`no_std`"
 //! build and whenever you want to evade re-allocations of a huge amount of data. You have to care
 //! about how to store and transfer a data length and a container prefix though.
+//!
+//! Both [`MiniCocoon`] and [`Cocoon`] have the same API, but prefixes are of different sizes.
+//! [`MiniCocoon`] doesn't have the overhead of generating KDF on each encryption call, therefore
+//! it's recommended for simple sequential encryption/decryption operations.
 //! ```
-//! # use cocoon::{Cocoon, Error};
+//! # use cocoon::{MiniCocoon, Error};
 //! #
 //! # fn main() -> Result<(), Error> {
-//! # // [`ThreadRng`] is used here just as an example. It is supposed to apply some other
-//! # // cryptographically secure RNG when [`ThreadRng`] is not accessible.
-//! # let mut good_rng = rand::rngs::ThreadRng::default();
 //! let mut data = "my secret data".to_owned().into_bytes();
-//! let cocoon = Cocoon::from_crypto_rng(b"password", good_rng);
-//! # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+//! let cocoon = MiniCocoon::from_key(b"0123456789abcdef0123456789abcdef", &[0; 32]);
 //!
 //! let detached_prefix = cocoon.encrypt(&mut data)?;
 //! assert_ne!(data, b"my secret data");

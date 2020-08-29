@@ -8,9 +8,9 @@
 
 <img alt="Cocoon format" src="https://github.com/fadeevab/cocoon/raw/master/images/cocoon_format.svg" />
 
-`Cocoon` is a protected container to wrap sensitive data with strong
-[encryption](#cryptography) and format validation. A format of `Cocoon` is developed
-for the following practical cases:
+`MiniCocoon` and `Cocoon` are protected containers to wrap sensitive data with strong
+[encryption](#cryptography) and format validation. A format of `MiniCocoon` and `Cocoon`
+is developed for the following practical cases:
 
 1. As an _encrypted file format_ to organize simple secure storage:
    1. Key store.
@@ -26,20 +26,24 @@ packages with disabled default features.
 
 # Problem
 
-Whenever you need secure storage you reinvent the wheel: you have to take care of
-how to encrypt data properly, how to store and transmit randomly generated
-buffers, then to get data back, parse, and decrypt securely. Instead, you can use `Cocoon`.
+Whenever you need to transmit and store data securely you reinvent the wheel: you have to
+take care of how to encrypt data properly, how to handle randomly generated buffers,
+then how to get data back, parse, and decrypt. Instead, you can use `MiniCocoon`
+and `Cocoon`.
 
 # Basic Usage
 
 ## 📌 Wrap/Unwrap
 
-One party wraps private data into a container using `Cocoon::wrap`.
-Another party (or the same one, or whoever knows the password) unwraps a private data
-out of the container using `Cocoon::unwrap`.
+One party wraps private data into a container using `MiniCocoon::wrap`.
+Another party (or the same one, or whoever knows the key) unwraps data
+out of the container using `MiniCocoon::unwrap`.
 
+`MiniCocoon` is preferred against `Cocoon` in a case of simple data transfer
+because it generates a container with a smaller header without version control, and also
+it allows to wrap data sequentially without performance drop of KDF calculation.
 ```rust
-let cocoon = Cocoon::new(b"password");
+let cocoon = MiniCocoon::from_key(b"0123456789abcdef0123456789abcdef", &[0; 32]);
 
 let wrapped = cocoon.wrap(b"my secret data")?;
 assert_ne!(&wrapped, b"my secret data");
@@ -52,6 +56,9 @@ assert_eq!(unwrapped, b"my secret data");
 
 You can store data to file. Put data into `Vec` container, the data is going to be
 encrypted _in place_ and stored in a file using the "cocoon" [format](#cocoon).
+
+`Cocoon` is preferred as a long-time data storage, it has an extended header with a magic
+number, options, and version control.
 ```rust
 let mut data = b"my secret data".to_vec();
 let cocoon = Cocoon::new(b"password");
@@ -68,9 +75,13 @@ You can encrypt data in place and avoid re-allocations. The method operates with
 meta-data (a container format prefix) in the array on the stack. It is suitable for "`no_std`"
 build and whenever you want to evade re-allocations of a huge amount of data. You have to care
 about how to store and transfer a data length and a container prefix though.
+
+Both `MiniCocoon` and `Cocoon` have the same API, but prefixes are of different sizes.
+`MiniCocoon` doesn't have the overhead of generating KDF on each encryption call, therefore
+it's recommended for simple sequential encryption/decryption operations.
 ```rust
 let mut data = "my secret data".to_owned().into_bytes();
-let cocoon = Cocoon::from_crypto_rng(b"password", good_rng);
+let cocoon = MiniCocoon::from_key(b"0123456789abcdef0123456789abcdef", &[0; 32]);
 
 let detached_prefix = cocoon.encrypt(&mut data)?;
 assert_ne!(data, b"my secret data");
