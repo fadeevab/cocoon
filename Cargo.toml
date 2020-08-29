@@ -1,6 +1,6 @@
 [package]
 name = "cocoon"
-version = "0.1.11"
+version = "0.2.0"
 description = "A simple protected container with strong encryption and format validation."
 authors = ["Alexander Fadeev <fadeevab.com@gmail.com>"]
 edition = "2018"
