@@ -48,85 +48,30 @@ pub struct MiniCocoon {
 /// Scroll down to [Features and Methods Mapping](#features-and-methods-mapping), and also see
 /// crate's documentation for more use cases.
 ///
-/// # Optimization
-///
-/// Whenever a new container is created a new encryption key is generated from a supplied password
-/// using Key Derivation Function (KDF). By default, PBKDF2 is used with 100 000 iterations of
-/// SHA256. The reason for that is security: slower KDF - slower attacker brute-forces the password.
-/// However, you may find it a bit _slow_ for debugging during _development_. If you experience
-/// a slower runtime, try to use one of the two approaches to speed it up.
-///
-/// ## Optimize Both `cocoon` And `sha2`
-/// Add these lines to `Cargo.toml`:
-/// ```toml
-/// [profile.dev.package.cocoon]
-/// opt-level = 3
-///
-/// [profile.dev.package.sha2]
-/// opt-level = 3
-/// ```
-///
-/// ## Use Less KDF Iterations
-/// You can configure [`Cocoon`] to use fewer iterations for KDF with [`Cocoon::with_weak_kdf`].
-/// Be careful, lower count of KDF iterations generate a _**weaker** encryption key_, therefore
-/// try to use it in debug build only.
-/// ```
-/// # use cocoon::Cocoon;
-/// // Attention: don't use a weak password in real life!
-/// let password = [1, 2, 3, 4, 5, 6];
-///
-/// let mut cocoon = if cfg!(debug_assertions) {
-///     Cocoon::new(&password).with_weak_kdf()
-/// } else {
-///     Cocoon::new(&password)
-/// };
-/// ```
-///
-/// # Using As a Struct Field
-///
-/// Currently, [`Cocoon`] is not supposed to be used within the data types as a structure member.
-/// [`Cocoon`] doesn't clone a password, instead, it uses a password reference and
-/// shares its lifetime. Also, [`Cocoon`] uses generics to evade dynamic dispatching and
-/// resolve variants at compile-time, so it makes its declaration in structures a little bit tricky.
-/// A convenient way to declare [`Cocoon`] as a structure member _could be introduced_ once it's
-/// needed by semantic, e.g. with introducing of KDF caching.
-///
 /// # Default Configuration
 /// | Option                      | Value                          |
 /// |-----------------------------|--------------------------------|
 /// | [Cipher](CocoonCipher)      | Chacha20Poly1305               |
 /// | [Key derivation](CocoonKdf) | PBKDF2 with 100 000 iterations |
-/// | Random generator            | [`ThreadRng`]                  |
 ///
-/// * Cipher can be customized using [`Cocoon::with_cipher`] method.
+/// * Cipher can be customized using [`MiniCocoon::with_cipher`] method.
 /// * Key derivation (KDF): only PBKDF2 is supported.
-/// * Random generator:
-///   - [`ThreadRng`] in `std` build.
-///   - [`StdRng`] in "no std" build: use [`Cocoon::from_rng`] and other `from_*` methods.
-///   - [`Cocoon::from_entropy`] functions.
 ///
 /// # Features and Methods Mapping
 ///
-/// _Note: This is a not complete list of API methods. Please, refer to the current
+/// _Note: It is maybe not a complete list of API methods. Please, refer to the current
 /// documentation below to get familiarized with the full set of methods._
 ///
-/// | Method ↓ / Feature →        | `std` | `alloc` | "no_std" |
-/// |-----------------------------|:-----:|:-------:|:--------:|
-/// | [`Cocoon::new`]             | ✔️    | ❌      | ❌      |
-/// | [`Cocoon::from_seed`]       | ✔️    | ✔️      | ✔️      |
-/// | [`Cocoon::from_crypto_rng`] | ✔️    | ✔️      | ✔️      |
-/// | [`Cocoon::from_entropy`]    | ✔️[^1]| ✔️[^1]  | ✔️[^1]  |
-/// | [`Cocoon::parse_only`][^2]  | ✔️    | ✔️      | ✔️      |
-/// | [`Cocoon::encrypt`]         | ✔️    | ✔️      | ✔️      |
-/// | [`Cocoon::decrypt`][^2]     | ✔️    | ✔️      | ✔️      |
-/// | [`Cocoon::wrap`]            | ✔️    | ✔️      | ❌      |
-/// | [`Cocoon::unwrap`][^2]      | ✔️    | ✔️      | ❌      |
-/// | [`Cocoon::dump`]            | ✔️    | ❌      | ❌      |
-/// | [`Cocoon::parse`][^2]       | ✔️    | ❌      | ❌      |
-///
-/// [^1]: [`from_entropy`](Cocoon:from_entropy) is enabled when `getrandom` feature is enabled.
-///
-/// [^2]: [`parse_only`](Cocoon::parse_only) makes decryption API accessible only.
+/// | Method ↓ / Feature →          | `std` | `alloc` | "no_std" |
+/// |-------------------------------|:-----:|:-------:|:--------:|
+/// | [`MiniCocoon::from_key`]      | ✔️    | ✔️      | ✔️      |
+/// | [`MiniCocoon::from_password`] | ✔️    | ✔️      | ✔️      |
+/// | [`MiniCocoon::encrypt`]       | ✔️    | ✔️      | ✔️      |
+/// | [`MiniCocoon::decrypt`]       | ✔️    | ✔️      | ✔️      |
+/// | [`MiniCocoon::wrap`]          | ✔️    | ✔️      | ❌      |
+/// | [`MiniCocoon::unwrap`]        | ✔️    | ✔️      | ❌      |
+/// | [`MiniCocoon::dump`]          | ✔️    | ❌      | ❌      |
+/// | [`MiniCocoon::parse`]         | ✔️    | ❌      | ❌      |
 impl MiniCocoon {
     /// Creates a new [`MiniCocoon`] with a symmetric key seeding a random generator
     /// using a given `seed` buffer.
