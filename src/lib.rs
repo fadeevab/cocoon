@@ -300,7 +300,12 @@ pub const PREFIX_SIZE: usize = FormatPrefix::SERIALIZE_SIZE;
 /// Re-export all MiniCocoon stuff.
 pub use mini::*;
 
-/// Stores data securely inside of encrypted container.
+/// Creates an encrypted container to hide your data inside of it using a user-supplied password.
+///
+/// Every operation of [`Cocoon`] starts with an expensive key derivation from a password,
+/// therefore prefer to use [`Cocoon`] to encrypt data at rest, and consider to use [`MiniCocoon`]
+/// in order to wrap/encrypt/dump data often (e.g. in transit) withing a lightweight container
+/// as a simple [`Vec`] (just wrap, wrap, wrap it!).
 ///
 /// # Basic Usage
 /// ```
