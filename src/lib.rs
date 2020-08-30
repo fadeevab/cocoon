@@ -34,9 +34,10 @@
 //! Another party (or the same one, or whoever knows the key) unwraps data
 //! out of the container using [`MiniCocoon::unwrap`].
 //!
-//! [`MiniCocoon`] is preferred against [`Cocoon`] in a case of simple data transfer
+//! [`MiniCocoon`] is preferred against [`Cocoon`] in a case of simple data encryption
 //! because it generates a container with a smaller header without version control, and also
-//! it allows to wrap data sequentially without performance drop of KDF calculation.
+//! it allows to wrap data sequentially (wrap, wrap, wrap!) without performance drop
+//! because of KDF calculation.
 //!
 //! ```
 //! # use cocoon::{MiniCocoon, Error};

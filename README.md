@@ -39,9 +39,10 @@ One party wraps private data into a container using `MiniCocoon::wrap`.
 Another party (or the same one, or whoever knows the key) unwraps data
 out of the container using `MiniCocoon::unwrap`.
 
-`MiniCocoon` is preferred against `Cocoon` in a case of simple data transfer
+`MiniCocoon` is preferred against `Cocoon` in a case of simple data encryption
 because it generates a container with a smaller header without version control, and also
-it allows to wrap data sequentially without performance drop of KDF calculation.
+it allows to wrap data sequentially (wrap, wrap, wrap!) without performance drop
+because of KDF calculation.
 ```rust
 let cocoon = MiniCocoon::from_key(b"0123456789abcdef0123456789abcdef", &[0; 32]);
 
