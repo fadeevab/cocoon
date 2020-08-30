@@ -153,7 +153,7 @@ impl MiniFormatPrefix {
 
         reader.read_exact(&mut raw[MINI_HEADER_SIZE..MINI_HEADER_SIZE + TAG_SIZE])?;
 
-        Ok(MiniFormatPrefix { header, raw, })
+        Ok(MiniFormatPrefix { header, raw })
     }
 
     pub fn header(&self) -> &MiniCocoonHeader {
@@ -271,7 +271,10 @@ mod test {
         let prefix = MiniFormatPrefix::deserialize(&raw).expect("Deserialized container's prefix");
 
         assert_eq!(&raw[..MINI_HEADER_SIZE], prefix.prefix());
-        assert_eq!(&raw[MINI_HEADER_SIZE..MINI_HEADER_SIZE + TAG_SIZE], prefix.tag());
+        assert_eq!(
+            &raw[MINI_HEADER_SIZE..MINI_HEADER_SIZE + TAG_SIZE],
+            prefix.tag()
+        );
     }
 
     #[test]
