@@ -1,4 +1,4 @@
-use core::convert::TryInto;
+use core::convert::{TryFrom, TryInto};
 
 use super::error::Error;
 
@@ -216,13 +216,14 @@ impl CocoonHeader {
 
     pub fn serialize_into(&self, buf: &mut [u8]) {
         debug_assert!(buf.len() >= Self::SIZE);
+        let length = u64::try_from(self.length).expect("Data too large");
 
         buf[..3].copy_from_slice(&self.magic);
         buf[3] = self.version as u8;
         buf[4..8].copy_from_slice(&self.config.serialize());
         buf[8..24].copy_from_slice(&self.salt);
         buf[24..36].copy_from_slice(&self.nonce);
-        buf[36..Self::SIZE].copy_from_slice(&self.length.to_be_bytes());
+        buf[36..Self::SIZE].copy_from_slice(&length.to_be_bytes());
     }
 
     pub fn deserialize(buf: &[u8]) -> Result<CocoonHeader, Error> {
@@ -242,11 +243,12 @@ impl CocoonHeader {
         salt.copy_from_slice(&buf[8..24]);
         let mut nonce = [0u8; 12];
         nonce.copy_from_slice(&buf[24..36]);
-        let length = usize::from_be_bytes(
-            buf[36..Self::SIZE]
-                .try_into()
-                .map_err(|_| Error::TooLarge)?,
-        );
+
+        let mut length_bytes = [0u8; 8];
+        length_bytes.copy_from_slice(&buf[36..Self::SIZE]);
+        let length = u64::from_be_bytes(length_bytes)
+            .try_into()
+            .map_err(|_| Error::TooLarge)?;
 
         Ok(CocoonHeader {
             magic,
@@ -300,9 +302,10 @@ impl MiniCocoonHeader {
 
     pub fn serialize_into(&self, buf: &mut [u8]) {
         debug_assert!(buf.len() >= Self::SIZE);
+        let length = u64::try_from(self.length).expect("Data too large");
 
         buf[..12].copy_from_slice(&self.nonce);
-        buf[12..Self::SIZE].copy_from_slice(&self.length.to_be_bytes());
+        buf[12..Self::SIZE].copy_from_slice(&length.to_be_bytes());
     }
 
     pub fn deserialize(buf: &[u8]) -> Result<Self, Error> {
@@ -312,11 +315,12 @@ impl MiniCocoonHeader {
 
         let mut nonce = [0u8; 12];
         nonce.copy_from_slice(&buf[..12]);
-        let length = usize::from_be_bytes(
-            buf[12..Self::SIZE]
-                .try_into()
-                .map_err(|_| Error::TooLarge)?,
-        );
+
+        let mut length_bytes = [0u8; 8];
+        length_bytes.copy_from_slice(&buf[12..Self::SIZE]);
+        let length = u64::from_be_bytes(length_bytes)
+            .try_into()
+            .map_err(|_| Error::TooLarge)?;
 
         Ok(MiniCocoonHeader { nonce, length })
     }
