@@ -286,6 +286,7 @@ use header::{CocoonConfig, CocoonHeader};
 
 pub use error::Error;
 pub use header::{CocoonCipher, CocoonKdf};
+use aes_gcm::AeadInPlace;
 
 /// Grouping creation methods via generics.
 #[doc(hidden)]
@@ -753,11 +754,11 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
 
         let tag: [u8; 16] = match self.config.cipher() {
             CocoonCipher::Chacha20Poly1305 => {
-                let cipher = ChaCha20Poly1305::new(master_key);
+                let cipher = ChaCha20Poly1305::new(&master_key);
                 cipher.encrypt_in_place_detached(nonce, &prefix.prefix(), data)
             }
             CocoonCipher::Aes256Gcm => {
-                let cipher = Aes256Gcm::new(master_key);
+                let cipher = Aes256Gcm::new(&master_key);
                 cipher.encrypt_in_place_detached(nonce, &prefix.prefix(), data)
             }
         }
@@ -907,11 +908,11 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
 
         match header.config().cipher() {
             CocoonCipher::Chacha20Poly1305 => {
-                let cipher = ChaCha20Poly1305::new(master_key);
+                let cipher = ChaCha20Poly1305::new(&master_key);
                 cipher.decrypt_in_place_detached(nonce, &detached_prefix.prefix(), data, tag)
             }
             CocoonCipher::Aes256Gcm => {
-                let cipher = Aes256Gcm::new(master_key);
+                let cipher = Aes256Gcm::new(&master_key);
                 cipher.decrypt_in_place_detached(nonce, &detached_prefix.prefix(), data, tag)
             }
         }
