@@ -1,6 +1,6 @@
 [package]
 name = "cocoon"
-version = "0.2.3"
+version = "0.2.4"
 description = "A simple protected container with strong encryption and format validation."
 authors = ["Alexander Fadeev <fadeevab.com@gmail.com>"]
 edition = "2018"
@@ -13,8 +13,8 @@ documentation = "https://docs.rs/cocoon"
 readme = "README.md"
 
 [dependencies]
-aes-gcm = "0.5.0"
-chacha20poly1305 = { version = "0.4.1", default-features = false, features = ["chacha20"] }
+aes-gcm = "0.9.3"
+chacha20poly1305 = { version = "0.8.1", default-features = false, features = ["chacha20", "heapless"] }
 hmac = "0.7.1"
 pbkdf2 = { version = "0.3.0", default-features = false, features = ["sha2", "hmac"] }
 rand = { version = "0.7.3", default-features = false }
