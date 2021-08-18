@@ -1,11 +1,9 @@
+use aes_gcm::AeadInPlace;
 use aes_gcm::{
-    aead::{generic_array::GenericArray, Aead, NewAead},
+    aead::{generic_array::GenericArray, NewAead},
     Aes256Gcm,
 };
 use chacha20poly1305::ChaCha20Poly1305;
-use aes_gcm::AeadInPlace;
-use chacha20poly1305::aead::NewAead as chacha20poly1305_NewAead;
-use chacha20poly1305::aead::AeadInPlace as chacha20poly1305_AeadInPlace;
 
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 #[cfg(feature = "std")]

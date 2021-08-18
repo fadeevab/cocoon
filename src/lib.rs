@@ -263,9 +263,9 @@ mod mini;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-use aes_gcm::Aes256Gcm;
+use aes_gcm::{AeadInPlace, Aes256Gcm};
 use chacha20poly1305::{
-    aead::{generic_array::GenericArray, Aead, NewAead},
+    aead::{generic_array::GenericArray, NewAead},
     ChaCha20Poly1305,
 };
 #[cfg(feature = "std")]
@@ -286,7 +286,6 @@ use header::{CocoonConfig, CocoonHeader};
 
 pub use error::Error;
 pub use header::{CocoonCipher, CocoonKdf};
-use aes_gcm::AeadInPlace;
 
 /// Grouping creation methods via generics.
 #[doc(hidden)]
