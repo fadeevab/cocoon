@@ -1,7 +1,6 @@
 use aes_gcm::{
     aead::{generic_array::GenericArray, NewAead},
-    AeadInPlace,
-    Aes256Gcm,
+    AeadInPlace, Aes256Gcm,
 };
 use chacha20poly1305::ChaCha20Poly1305;
 
