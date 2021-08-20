@@ -1,6 +1,6 @@
 use aes_gcm::{
-    aead::{generic_array::GenericArray, Aead, NewAead},
-    Aes256Gcm,
+    aead::{generic_array::GenericArray, NewAead},
+    AeadInPlace, Aes256Gcm,
 };
 use chacha20poly1305::ChaCha20Poly1305;
 
@@ -274,11 +274,11 @@ impl MiniCocoon {
 
         let tag: [u8; 16] = match self.config.cipher() {
             CocoonCipher::Chacha20Poly1305 => {
-                let cipher = ChaCha20Poly1305::new(key);
+                let cipher = ChaCha20Poly1305::new(&key);
                 cipher.encrypt_in_place_detached(nonce, &prefix.prefix(), data)
             }
             CocoonCipher::Aes256Gcm => {
-                let cipher = Aes256Gcm::new(key);
+                let cipher = Aes256Gcm::new(&key);
                 cipher.encrypt_in_place_detached(nonce, &prefix.prefix(), data)
             }
         }
@@ -424,11 +424,11 @@ impl MiniCocoon {
 
         match self.config.cipher() {
             CocoonCipher::Chacha20Poly1305 => {
-                let cipher = ChaCha20Poly1305::new(master_key);
+                let cipher = ChaCha20Poly1305::new(&master_key);
                 cipher.decrypt_in_place_detached(nonce, &detached_prefix.prefix(), data, tag)
             }
             CocoonCipher::Aes256Gcm => {
-                let cipher = Aes256Gcm::new(master_key);
+                let cipher = Aes256Gcm::new(&master_key);
                 cipher.decrypt_in_place_detached(nonce, &detached_prefix.prefix(), data, tag)
             }
         }
