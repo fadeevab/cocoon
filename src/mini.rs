@@ -2,8 +2,9 @@ use aes_gcm::{
     aead::{generic_array::GenericArray, NewAead},
     AeadInPlace, Aes256Gcm,
 };
+#[cfg(feature = "alloc")]
+use alloc::vec::Vec;
 use chacha20poly1305::ChaCha20Poly1305;
-
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 #[cfg(feature = "std")]
 use std::io::{Read, Write};

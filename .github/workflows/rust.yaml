@@ -20,6 +20,10 @@ jobs:
       run: cargo fmt -- --check
     - name: Build
       run: cargo build --verbose
+    - name: Build with no default features
+      run: cargo build --no-default-features
+    - name: Build with only "alloc" feature
+      run: cargo build --no-default-features --features="alloc"
     - name: Run tests
       run: cargo test --verbose
 
