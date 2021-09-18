@@ -22,7 +22,7 @@ pub mod pbkdf2 {
         // Prepare an output buffer.
         let mut derived_key = [0u8; KEY_SIZE];
 
-        pbkdf2::<Hmac<Sha256>>(password, &ext_salt, iterations as usize, &mut derived_key);
+        pbkdf2::<Hmac<Sha256>>(password, &ext_salt, iterations, &mut derived_key);
 
         Zeroizing::new(derived_key)
     }
