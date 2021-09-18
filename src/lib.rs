@@ -272,7 +272,7 @@ use chacha20poly1305::{
 use rand::rngs::ThreadRng;
 use rand::{
     rngs::StdRng,
-    {CryptoRng, RngCore, SeedableRng},
+    {RngCore, SeedableRng},
 };
 
 #[cfg(feature = "alloc")]
@@ -283,6 +283,15 @@ use std::io::{Read, Write};
 
 use format::FormatPrefix;
 use header::{CocoonConfig, CocoonHeader};
+
+// Enumeration is needed to avoid dynamic allocation (important for "nostd" build).
+#[allow(clippy::clippy::large_enum_variant)]
+enum RngVariant {
+    #[cfg(feature = "std")]
+    Thread(ThreadRng),
+    Std(StdRng),
+    None,
+}
 
 pub use error::Error;
 pub use header::{CocoonCipher, CocoonKdf};
@@ -395,7 +404,6 @@ pub use mini::*;
 /// |-----------------------------|:-----:|:-------:|:--------:|
 /// | [`Cocoon::new`]             | ✔️    | ❌      | ❌      |
 /// | [`Cocoon::from_seed`]       | ✔️    | ✔️      | ✔️      |
-/// | [`Cocoon::from_crypto_rng`] | ✔️    | ✔️      | ✔️      |
 /// | [`Cocoon::from_entropy`]    | ✔️[^1]| ✔️[^1]  | ✔️[^1]  |
 /// | [`Cocoon::parse_only`][^2]  | ✔️    | ✔️      | ✔️      |
 /// | [`Cocoon::encrypt`]         | ✔️    | ✔️      | ✔️      |
@@ -408,16 +416,16 @@ pub use mini::*;
 /// [^1]: [`from_entropy`](Cocoon:from_entropy) is enabled when `getrandom` feature is enabled.
 ///
 /// [^2]: [`parse_only`](Cocoon::parse_only) makes decryption API accessible only.
-pub struct Cocoon<'a, R: CryptoRng + RngCore + Clone, M> {
+pub struct Cocoon<'a, M> {
     password: &'a [u8],
-    rng: R,
+    rng: RngVariant,
     config: CocoonConfig,
     _methods_marker: PhantomData<M>,
 }
 
 #[cfg(feature = "std")]
 #[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
-impl<'a> Cocoon<'a, ThreadRng, Creation> {
+impl<'a> Cocoon<'a, Creation> {
     /// Creates a new [`Cocoon`] with [`ThreadRng`] random generator under the hood
     /// and a [Default Configuration](#default-configuration).
     ///
@@ -432,14 +440,14 @@ impl<'a> Cocoon<'a, ThreadRng, Creation> {
     pub fn new(password: &'a [u8]) -> Self {
         Cocoon {
             password,
-            rng: ThreadRng::default(),
+            rng: RngVariant::Thread(ThreadRng::default()),
             config: CocoonConfig::default(),
             _methods_marker: PhantomData,
         }
     }
 }
 
-impl<'a> Cocoon<'a, StdRng, Creation> {
+impl<'a> Cocoon<'a, Creation> {
     /// Creates a new [`Cocoon`] seeding a random generator using the given buffer.
     ///
     /// * `password` - a shared reference to a password
@@ -464,7 +472,7 @@ impl<'a> Cocoon<'a, StdRng, Creation> {
     pub fn from_seed(password: &'a [u8], seed: [u8; 32]) -> Self {
         Cocoon {
             password,
-            rng: StdRng::from_seed(seed),
+            rng: RngVariant::Std(StdRng::from_seed(seed)),
             config: CocoonConfig::default(),
             _methods_marker: PhantomData,
         }
@@ -487,13 +495,10 @@ impl<'a> Cocoon<'a, StdRng, Creation> {
     /// # let mut good_rng = rand::rngs::ThreadRng::default();
     /// let cocoon = Cocoon::from_rng(b"password", good_rng).unwrap();
     /// ```
-    ///
-    /// # References
-    /// Also, see [`Cocoon::from_crypto_rng`] which doesn't fail.
     pub fn from_rng<R: RngCore>(password: &'a [u8], rng: R) -> Result<Self, rand::Error> {
         Ok(Cocoon {
             password,
-            rng: StdRng::from_rng(rng)?,
+            rng: RngVariant::Std(StdRng::from_rng(rng)?),
             config: CocoonConfig::default(),
             _methods_marker: PhantomData,
         })
@@ -518,14 +523,14 @@ impl<'a> Cocoon<'a, StdRng, Creation> {
     pub fn from_entropy(password: &'a [u8]) -> Self {
         Cocoon {
             password,
-            rng: StdRng::from_entropy(),
+            rng: RngVariant::Std(StdRng::from_entropy()),
             config: CocoonConfig::default(),
             _methods_marker: PhantomData,
         }
     }
 }
 
-impl<'a> Cocoon<'a, NoRng, Parsing> {
+impl<'a> Cocoon<'a, Parsing> {
     /// Creates a [`Cocoon`] instance allowing to only decrypt a container. It makes only decryption
     /// methods accessible at compile-time: [`Cocoon::unwrap`], [`Cocoon::parse`] and
     /// [`Cocoon::decrypt`].
@@ -565,34 +570,7 @@ impl<'a> Cocoon<'a, NoRng, Parsing> {
     pub fn parse_only(password: &'a [u8]) -> Self {
         Cocoon {
             password,
-            rng: NoRng,
-            config: CocoonConfig::default(),
-            _methods_marker: PhantomData,
-        }
-    }
-}
-
-impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
-    /// Creates a new `Cocoon` using a third party _cryptographically secure_ random generator.
-    /// Unlike [`Cocoon::from_rng`] this method never fails.
-    ///
-    /// * `password` - a shared reference to a password
-    /// * `rng` - a cryptographically strong random generator
-    ///
-    /// # Examples
-    /// ```
-    /// use cocoon::Cocoon;
-    /// # use rand;
-    ///
-    /// # // [`ThreadRng`] is used here just as an example. It is supposed to apply some other
-    /// # // cryptographically secure RNG when [`ThreadRng`] is not accessible.
-    /// # let mut good_rng = rand::rngs::ThreadRng::default();
-    /// let cocoon = Cocoon::from_crypto_rng(b"password", good_rng);
-    /// ```
-    pub fn from_crypto_rng(password: &'a [u8], rng: R) -> Self {
-        Cocoon {
-            password,
-            rng,
+            rng: RngVariant::None,
             config: CocoonConfig::default(),
             _methods_marker: PhantomData,
         }
@@ -600,7 +578,7 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
 }
 
 // Wrapping/encryption methods are accessible only when random generator is accessible.
-impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
+impl<'a> Cocoon<'a, Creation> {
     /// Sets an encryption algorithm to wrap data on.
     ///
     /// # Examples
@@ -722,7 +700,7 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
     /// # // cryptographically secure RNG when [`ThreadRng`] is not accessible.
     /// # let mut good_rng = rand::rngs::ThreadRng::default();
     /// let mut data = "my secret data".to_owned().into_bytes();
-    /// let cocoon = Cocoon::from_crypto_rng(b"password", good_rng);
+    /// let cocoon = Cocoon::from_rng(b"password", good_rng).unwrap();
     /// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
     ///
     /// let detached_prefix = cocoon.encrypt(&mut data)?;
@@ -731,13 +709,23 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
     /// # }
     /// ```
     pub fn encrypt(&self, data: &mut [u8]) -> Result<[u8; PREFIX_SIZE], Error> {
-        let mut rng = self.rng.clone();
-
         let mut salt = [0u8; 16];
         let mut nonce = [0u8; 12];
 
-        rng.fill_bytes(&mut salt);
-        rng.fill_bytes(&mut nonce);
+        match &self.rng {
+            #[cfg(feature = "std")]
+            RngVariant::Thread(rng) => {
+                let mut rng = *rng;
+                rng.fill_bytes(&mut salt);
+                rng.fill_bytes(&mut nonce);
+            }
+            RngVariant::Std(rng) => {
+                let mut rng = rng.clone();
+                rng.fill_bytes(&mut salt);
+                rng.fill_bytes(&mut nonce);
+            }
+            RngVariant::None => unreachable!(),
+        }
 
         let header = CocoonHeader::new(self.config.clone(), salt, nonce, data.len());
         let prefix = FormatPrefix::new(header);
@@ -769,7 +757,7 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
 }
 
 /// Parsing methods are always accessible. They don't need random generator in general.
-impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
+impl<'a, M> Cocoon<'a, M> {
     /// Unwraps data from the encrypted container (see [`Cocoon::wrap`]).
     ///
     /// # Examples
@@ -862,7 +850,7 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
     /// # // cryptographically secure RNG when [`ThreadRng`] is not accessible.
     /// # let mut good_rng = rand::rngs::ThreadRng::default();
     /// let mut data = "my secret data".to_owned().into_bytes();
-    /// let cocoon = Cocoon::from_crypto_rng(b"password", good_rng);
+    /// let cocoon = Cocoon::from_rng(b"password", good_rng).unwrap();
     /// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
     ///
     /// let detached_prefix = cocoon.encrypt(&mut data)?;
@@ -921,26 +909,6 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
     }
 }
 
-#[doc(hidden)]
-#[derive(Clone)]
-pub struct NoRng;
-
-impl CryptoRng for NoRng {}
-impl RngCore for NoRng {
-    fn next_u32(&mut self) -> u32 {
-        unreachable!();
-    }
-    fn next_u64(&mut self) -> u64 {
-        unreachable!();
-    }
-    fn fill_bytes(&mut self, _dest: &mut [u8]) {
-        unreachable!();
-    }
-    fn try_fill_bytes(&mut self, _dest: &mut [u8]) -> Result<(), rand::Error> {
-        unreachable!();
-    }
-}
-
 #[cfg(test)]
 mod test {
     use std::fs::File;
@@ -954,8 +922,6 @@ mod test {
         Cocoon::from_seed(b"another password", [0; 32]).with_weak_kdf();
         Cocoon::from_entropy(b"new password");
         Cocoon::from_rng(b"password", rand::thread_rng()).unwrap();
-        Cocoon::from_crypto_rng(b"password", NoRng);
-        Cocoon::from_crypto_rng(b"password", rand::thread_rng());
         Cocoon::parse_only(b"password");
     }
 
