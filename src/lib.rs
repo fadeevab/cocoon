@@ -754,11 +754,11 @@ impl<'a, R: CryptoRng + RngCore + Clone> Cocoon<'a, R, Creation> {
         let tag: [u8; 16] = match self.config.cipher() {
             CocoonCipher::Chacha20Poly1305 => {
                 let cipher = ChaCha20Poly1305::new(&master_key);
-                cipher.encrypt_in_place_detached(nonce, &prefix.prefix(), data)
+                cipher.encrypt_in_place_detached(nonce, prefix.prefix(), data)
             }
             CocoonCipher::Aes256Gcm => {
                 let cipher = Aes256Gcm::new(&master_key);
-                cipher.encrypt_in_place_detached(nonce, &prefix.prefix(), data)
+                cipher.encrypt_in_place_detached(nonce, prefix.prefix(), data)
             }
         }
         .map_err(|_| Error::Cryptography)?
@@ -903,16 +903,16 @@ impl<'a, R: CryptoRng + RngCore + Clone, M> Cocoon<'a, R, M> {
 
         let nonce = GenericArray::from_slice(&nonce);
         let master_key = GenericArray::clone_from_slice(master_key.as_ref());
-        let tag = GenericArray::from_slice(&detached_prefix.tag());
+        let tag = GenericArray::from_slice(detached_prefix.tag());
 
         match header.config().cipher() {
             CocoonCipher::Chacha20Poly1305 => {
                 let cipher = ChaCha20Poly1305::new(&master_key);
-                cipher.decrypt_in_place_detached(nonce, &detached_prefix.prefix(), data, tag)
+                cipher.decrypt_in_place_detached(nonce, detached_prefix.prefix(), data, tag)
             }
             CocoonCipher::Aes256Gcm => {
                 let cipher = Aes256Gcm::new(&master_key);
-                cipher.decrypt_in_place_detached(nonce, &detached_prefix.prefix(), data, tag)
+                cipher.decrypt_in_place_detached(nonce, detached_prefix.prefix(), data, tag)
             }
         }
         .map_err(|_| Error::Cryptography)?;
