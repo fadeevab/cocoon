@@ -285,7 +285,7 @@ use format::FormatPrefix;
 use header::{CocoonConfig, CocoonHeader};
 
 // Enumeration is needed to avoid dynamic allocation (important for "nostd" build).
-#[allow(clippy::clippy::large_enum_variant)]
+#[allow(clippy::large_enum_variant)]
 enum RngVariant {
     #[cfg(feature = "std")]
     Thread(ThreadRng),
@@ -553,14 +553,20 @@ impl<'a> Cocoon<'a, Parsing> {
     /// ```
     ///
     /// Meanwhile, decryption methods are accessible.
-    /// ```should_panic
+    /// ```
     /// use cocoon::{Cocoon, Error};
     ///
     /// # fn main() -> Result<(), Error> {
     /// let cocoon = Cocoon::parse_only(b"password");
     ///
-    /// # let mut data = [0; 10]; // Fake data just to run the example.
-    /// # let detached_prefix = [0; 10]; // Fake prefix just to run the example.
+    /// # let mut data = [
+    /// #     244, 85, 222, 144, 119, 169, 144, 11, 178, 216, 4, 57, 17, 47, 0,
+    /// # ];
+    /// # let detached_prefix = [
+    /// #     127, 192, 10, 1, 1, 1, 1, 0, 118, 184, 224, 173, 160, 241, 61, 144, 64, 93, 106, 229,
+    /// #     83, 134, 189, 40, 189, 210, 25, 184, 160, 141, 237, 26, 168, 54, 239, 204, 0, 0, 0, 0,
+    /// #     0, 0, 0, 14, 53, 9, 86, 247, 53, 186, 123, 217, 156, 132, 173, 200, 208, 134, 179, 12,
+    /// # ];
     /// #
     /// cocoon.decrypt(&mut data, &detached_prefix)?;
     /// #
