@@ -247,7 +247,7 @@ impl CocoonHeader {
         let mut length_bytes = [0u8; 8];
         length_bytes.copy_from_slice(&buf[36..Self::SIZE]);
 
-        // Covert to usize which may fail on 32-bit platform.
+        // Covert to usize, that may fail on 32-bit platform.
         let length: usize = u64::from_be_bytes(length_bytes)
             .try_into()
             .map_err(|_| Error::TooLarge)?;
