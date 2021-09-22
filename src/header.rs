@@ -379,6 +379,15 @@ mod test {
     }
 
     #[test]
+    fn header_config_deserialize_with_options() {
+        let config = CocoonConfig::default()
+            .with_weak_kdf()
+            .with_cipher(CocoonCipher::Aes256Gcm)
+            .serialize();
+        CocoonConfig::deserialize(&config).expect("Deserialized config");
+    }
+
+    #[test]
     fn header_new() {
         let header = CocoonHeader::new(CocoonConfig::default(), [0; 16], [0; 12], std::usize::MAX);
         assert_eq!(header.config(), &CocoonConfig::default());
@@ -419,6 +428,18 @@ mod test {
         assert_eq!(header.nonce(), [2; 12]);
         assert_eq!(header.data_length(), 50);
         assert_eq!(header.version(), CocoonVersion::Version1);
+    }
+
+    #[test]
+    fn header_deserialize_small() {
+        let raw_header = [0u8; CocoonHeader::SIZE - 1];
+        match CocoonHeader::deserialize(&raw_header) {
+            Err(e) => match e {
+                Error::UnrecognizedFormat => (),
+                _ => panic!("Unexpected error, UnrecognizedFormat is expected only"),
+            },
+            _ => panic!("Success is not expected"),
+        }
     }
 
     #[test]
