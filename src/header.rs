@@ -246,7 +246,9 @@ impl CocoonHeader {
 
         let mut length_bytes = [0u8; 8];
         length_bytes.copy_from_slice(&buf[36..Self::SIZE]);
-        let length = u64::from_be_bytes(length_bytes)
+
+        // Covert to usize which may fail on 32-bit platform.
+        let length: usize = u64::from_be_bytes(length_bytes)
             .try_into()
             .map_err(|_| Error::TooLarge)?;
 
@@ -440,7 +442,7 @@ mod test {
         for i in 7..CocoonHeader::SIZE {
             let mut raw_header = header.serialize();
             raw_header[i] = 0xff;
-            CocoonHeader::deserialize(&raw_header).expect("Header must be serialized");
+            CocoonHeader::deserialize(&raw_header).expect("Header must be deserialized");
         }
     }
 
@@ -481,7 +483,7 @@ mod test {
         for i in 0..MiniCocoonHeader::SIZE {
             let mut raw_header = header.serialize();
             raw_header[i] = 0xff;
-            MiniCocoonHeader::deserialize(&raw_header).expect("Header must be serialized");
+            MiniCocoonHeader::deserialize(&raw_header).expect("Header must be deserialized");
         }
     }
 
@@ -498,5 +500,11 @@ mod test {
                 _ => panic!("Success is not expected"),
             }
         }
+    }
+
+    #[test]
+    fn mini_header_deserialize_long() {
+        let header = [0u8; MiniCocoonHeader::SIZE + 1];
+        MiniCocoonHeader::deserialize(&header).expect("Header must be deserialized");
     }
 }
