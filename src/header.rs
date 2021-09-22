@@ -484,4 +484,19 @@ mod test {
             MiniCocoonHeader::deserialize(&raw_header).expect("Header must be serialized");
         }
     }
+
+    #[test]
+    fn mini_header_deserialize_short() {
+        let header = [0u8; MiniCocoonHeader::SIZE];
+
+        for i in 0..header.len() - 1 {
+            match MiniCocoonHeader::deserialize(&header[0..i]) {
+                Err(e) => match e {
+                    Error::UnrecognizedFormat => (),
+                    _ => panic!("Unexpected error, UnrecognizedFormat is expected only"),
+                },
+                _ => panic!("Success is not expected"),
+            }
+        }
+    }
 }
