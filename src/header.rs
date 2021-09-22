@@ -425,9 +425,9 @@ mod test {
 
         // Corrupt header: one byte per time.
         for i in 0..7 {
-            let mut header = header.serialize();
-            header[i] = 0xff;
-            match CocoonHeader::deserialize(&header) {
+            let mut raw_header = header.serialize();
+            raw_header[i] = 0xff;
+            match CocoonHeader::deserialize(&raw_header) {
                 Ok(_) => panic!("Header must not be deserialized on byte #{}", i),
                 Err(e) => match e {
                     Error::UnrecognizedFormat => (),
@@ -436,11 +436,11 @@ mod test {
             }
         }
 
-        // Corrupt header: reserved byte is ignored, and random data and length can be any.
+        // Corrupt header: the reserved byte is ignored, and random data and length can be any.
         for i in 7..CocoonHeader::SIZE {
-            let mut header = header.serialize();
-            header[i] = 0xff;
-            CocoonHeader::deserialize(&header).expect("Header must be serialized");
+            let mut raw_header = header.serialize();
+            raw_header[i] = 0xff;
+            CocoonHeader::deserialize(&raw_header).expect("Header must be serialized");
         }
     }
 
@@ -479,9 +479,9 @@ mod test {
 
         // Corrupt header: random data and length can be any.
         for i in 0..MiniCocoonHeader::SIZE {
-            let mut header = header.serialize();
-            header[i] = 0xff;
-            MiniCocoonHeader::deserialize(&header).expect("Header must be serialized");
+            let mut raw_header = header.serialize();
+            raw_header[i] = 0xff;
+            MiniCocoonHeader::deserialize(&raw_header).expect("Header must be serialized");
         }
     }
 }
