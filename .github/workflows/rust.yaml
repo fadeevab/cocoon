@@ -28,7 +28,6 @@ jobs:
       run: cargo test --verbose
 
   coverage:
-    if: false # Disable the job temporarily until Coverall.io recovers
     runs-on: ubuntu-latest
 
     steps:
