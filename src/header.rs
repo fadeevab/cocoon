@@ -246,7 +246,9 @@ impl CocoonHeader {
 
         let mut length_bytes = [0u8; 8];
         length_bytes.copy_from_slice(&buf[36..Self::SIZE]);
-        let length = u64::from_be_bytes(length_bytes)
+
+        // Covert to usize, that may fail on 32-bit platform.
+        let length: usize = u64::from_be_bytes(length_bytes)
             .try_into()
             .map_err(|_| Error::TooLarge)?;
 
@@ -377,6 +379,15 @@ mod test {
     }
 
     #[test]
+    fn header_config_deserialize_with_options() {
+        let config = CocoonConfig::default()
+            .with_weak_kdf()
+            .with_cipher(CocoonCipher::Aes256Gcm)
+            .serialize();
+        CocoonConfig::deserialize(&config).expect("Deserialized config");
+    }
+
+    #[test]
     fn header_new() {
         let header = CocoonHeader::new(CocoonConfig::default(), [0; 16], [0; 12], std::usize::MAX);
         assert_eq!(header.config(), &CocoonConfig::default());
@@ -420,14 +431,26 @@ mod test {
     }
 
     #[test]
+    fn header_deserialize_small() {
+        let raw_header = [0u8; CocoonHeader::SIZE - 1];
+        match CocoonHeader::deserialize(&raw_header) {
+            Err(e) => match e {
+                Error::UnrecognizedFormat => (),
+                _ => panic!("Unexpected error, UnrecognizedFormat is expected only"),
+            },
+            _ => panic!("Success is not expected"),
+        }
+    }
+
+    #[test]
     fn header_deserialize_modified() {
         let header = CocoonHeader::new(CocoonConfig::default(), [1; 16], [2; 12], 50);
 
         // Corrupt header: one byte per time.
         for i in 0..7 {
-            let mut header = header.serialize();
-            header[i] = 0xff;
-            match CocoonHeader::deserialize(&header) {
+            let mut raw_header = header.serialize();
+            raw_header[i] = 0xff;
+            match CocoonHeader::deserialize(&raw_header) {
                 Ok(_) => panic!("Header must not be deserialized on byte #{}", i),
                 Err(e) => match e {
                     Error::UnrecognizedFormat => (),
@@ -436,11 +459,11 @@ mod test {
             }
         }
 
-        // Corrupt header: reserved byte is ignored, and random data and length can be any.
+        // Corrupt header: the reserved byte is ignored, and random data and length can be any.
         for i in 7..CocoonHeader::SIZE {
-            let mut header = header.serialize();
-            header[i] = 0xff;
-            CocoonHeader::deserialize(&header).expect("Header must be serialized");
+            let mut raw_header = header.serialize();
+            raw_header[i] = 0xff;
+            CocoonHeader::deserialize(&raw_header).expect("Header must be deserialized");
         }
     }
 
@@ -479,9 +502,30 @@ mod test {
 
         // Corrupt header: random data and length can be any.
         for i in 0..MiniCocoonHeader::SIZE {
-            let mut header = header.serialize();
-            header[i] = 0xff;
-            MiniCocoonHeader::deserialize(&header).expect("Header must be serialized");
+            let mut raw_header = header.serialize();
+            raw_header[i] = 0xff;
+            MiniCocoonHeader::deserialize(&raw_header).expect("Header must be deserialized");
         }
+    }
+
+    #[test]
+    fn mini_header_deserialize_short() {
+        let header = [0u8; MiniCocoonHeader::SIZE];
+
+        for i in 0..header.len() - 1 {
+            match MiniCocoonHeader::deserialize(&header[0..i]) {
+                Err(e) => match e {
+                    Error::UnrecognizedFormat => (),
+                    _ => panic!("Unexpected error, UnrecognizedFormat is expected only"),
+                },
+                _ => panic!("Success is not expected"),
+            }
+        }
+    }
+
+    #[test]
+    fn mini_header_deserialize_long() {
+        let header = [0u8; MiniCocoonHeader::SIZE + 1];
+        MiniCocoonHeader::deserialize(&header).expect("Header must be deserialized");
     }
 }
