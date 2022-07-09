@@ -58,7 +58,7 @@ pub struct CocoonConfig {
     kdf_variant: CocoonKdfVariant,
     /// Reserved byte is for the explicit structure aligning
     /// as well as for possible format upgrade in future.
-    reserved: u8,
+    _reserved: u8,
 }
 
 impl Default for CocoonConfig {
@@ -67,7 +67,7 @@ impl Default for CocoonConfig {
             cipher: CocoonCipher::Chacha20Poly1305,
             kdf: CocoonKdf::Pbkdf2,
             kdf_variant: CocoonKdfVariant::Strong,
-            reserved: Default::default(),
+            _reserved: Default::default(),
         }
     }
 }
@@ -129,7 +129,7 @@ impl CocoonConfig {
             cipher,
             kdf,
             kdf_variant,
-            reserved: Default::default(),
+            _reserved: Default::default(),
         })
     }
 }
