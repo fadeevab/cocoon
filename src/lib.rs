@@ -263,9 +263,9 @@ mod mini;
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
-use aes_gcm::{AeadInPlace, Aes256Gcm};
+use aes_gcm::{Aes256Gcm, KeyInit};
 use chacha20poly1305::{
-    aead::{generic_array::GenericArray, NewAead},
+    aead::{generic_array::GenericArray, AeadInPlace},
     ChaCha20Poly1305,
 };
 #[cfg(feature = "std")]
