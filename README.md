@@ -2,11 +2,11 @@
 [![crates.io](https://img.shields.io/crates/v/cocoon.svg)](https://crates.io/crates/cocoon)
 [![docs.rs](https://docs.rs/cocoon/badge.svg)](https://docs.rs/cocoon/)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/fadeevab/cocoon/LICENSE)
-[![coverage](https://coveralls.io/repos/github/fadeevab/cocoon/badge.svg?branch=master)](https://coveralls.io/github/fadeevab/cocoon?branch=master)
+[![coverage](https://coveralls.io/repos/github/fadeevab/cocoon/badge.svg?branch=main)](https://coveralls.io/github/fadeevab/cocoon?branch=main)
 
 # Cocoon
 
-<img alt="Cocoon format" src="https://github.com/fadeevab/cocoon/raw/master/images/cocoon_format.svg" />
+<img alt="Cocoon format" src="https://github.com/fadeevab/cocoon/raw/main/images/cocoon_format.svg" />
 
 `MiniCocoon` and `Cocoon` are protected containers to wrap sensitive data with strong
 [encryption](#cryptography) and format validation. A format of `MiniCocoon` and `Cocoon`

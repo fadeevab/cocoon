@@ -1,5 +1,5 @@
 use aes_gcm::{
-    aead::{generic_array::GenericArray, NewAead},
+    aead::{generic_array::GenericArray, KeyInit},
     AeadInPlace, Aes256Gcm,
 };
 #[cfg(feature = "alloc")]
