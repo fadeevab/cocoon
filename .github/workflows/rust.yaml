@@ -33,7 +33,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Select Rust nightly build
-      run: rustup default nightly
+      run: rustup default nightly-2021-11-11
     - name: Test with profiling
       env:
         CARGO_INCREMENTAL: 0
