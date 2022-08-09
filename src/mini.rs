@@ -623,8 +623,11 @@ mod test {
 
     #[test]
     fn mini_cocoon_dump_io_error() {
-        File::create("target/read_only.txt").expect("Test file");
-        let mut file = File::open("target/read_only.txt").expect("Test file");
+        let read_only_file =
+            std::env::var("CARGO_TARGET_DIR").unwrap_or("target".into()) + "/read_only.txt";
+
+        File::create(read_only_file.clone()).expect("Test file");
+        let mut file = File::open(read_only_file).expect("Test file");
 
         let cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
 
@@ -642,8 +645,11 @@ mod test {
 
     #[test]
     fn mini_cocoon_parse_io_error() {
-        File::create("target/read_only.txt").expect("Test file");
-        let mut file = File::open("target/read_only.txt").expect("Test file");
+        let read_only_file =
+            std::env::var("CARGO_TARGET_DIR").unwrap_or("target".into()) + "/read_only.txt";
+
+        File::create(read_only_file.clone()).expect("Test file");
+        let mut file = File::open(read_only_file).expect("Test file");
 
         let cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
 
