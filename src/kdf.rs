@@ -1,5 +1,6 @@
 pub const KEY_SIZE: usize = 32;
 pub const SALT_MIN_SIZE: usize = 16;
+pub const SALT_MAX_SIZE: usize = 64;
 
 /// A 256-bit key derived from a password using PBKDF2 (HMAC-SHA256) with guaranteed zeroization.
 pub mod pbkdf2 {
@@ -8,21 +9,32 @@ pub mod pbkdf2 {
     use sha2::Sha256;
     use zeroize::Zeroizing;
 
-    use super::{KEY_SIZE, SALT_MIN_SIZE};
+    use super::{KEY_SIZE, SALT_MAX_SIZE, SALT_MIN_SIZE};
 
     /// Derives a 256-bit symmetric key from a byte array (password or another key) using PBKDF2.
     pub fn derive(salt: &[u8], password: &[u8], iterations: u32) -> Zeroizing<[u8; KEY_SIZE]> {
         debug_assert!(salt.len() >= SALT_MIN_SIZE);
+        debug_assert!(salt.len() <= SALT_MAX_SIZE);
 
         // NIST SP 800-132 (PBKDF2) recommends to concatenate a constant purpose to the random part
         // in order to narrow down a key usage domain to the scope of the current application.
         // Salt = [constant string || random value].
-        let ext_salt = [b"cocoon", salt].concat();
+        const COCOON_PREFIX: &[u8] = b"cocoon";
+        const COCOON_PREFIX_LEN: usize = COCOON_PREFIX.len();
+
+        let mut ext_salt = [0u8; SALT_MAX_SIZE + COCOON_PREFIX_LEN];
+        ext_salt[..COCOON_PREFIX_LEN].copy_from_slice(COCOON_PREFIX);
+        ext_salt[COCOON_PREFIX_LEN..COCOON_PREFIX_LEN + salt.len()].copy_from_slice(salt);
 
         // Prepare an output buffer.
         let mut derived_key = [0u8; KEY_SIZE];
 
-        pbkdf2::<Hmac<Sha256>>(password, &ext_salt, iterations, &mut derived_key);
+        pbkdf2::<Hmac<Sha256>>(
+            password,
+            &ext_salt[..COCOON_PREFIX_LEN + salt.len()],
+            iterations,
+            &mut derived_key,
+        );
 
         Zeroizing::new(derived_key)
     }
