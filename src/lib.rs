@@ -999,6 +999,25 @@ mod test {
     }
 
     #[test]
+    fn cocoon_decrypt_aes() {
+        let detached_prefix = [
+            127, 192, 10, 1, 2, 1, 2, 0, 155, 244, 154, 106, 7, 85, 249, 83, 129, 31, 206, 18, 95,
+            38, 131, 213, 4, 41, 195, 187, 73, 224, 116, 20, 126, 0, 137, 165, 0, 0, 0, 0, 0, 0, 0,
+            14, 103, 127, 175, 154, 15, 80, 248, 145, 128, 241, 138, 15, 154, 128, 201, 157,
+        ];
+        let mut data = [
+            88, 183, 11, 7, 192, 224, 203, 107, 144, 162, 48, 78, 61, 223,
+        ];
+        let cocoon = Cocoon::parse_only(b"password");
+
+        cocoon
+            .decrypt(&mut data, &detached_prefix)
+            .expect("Decrypted data");
+
+        assert_eq!(b"my secret data", &data);
+    }
+
+    #[test]
     fn cocoon_wrap() {
         let cocoon = Cocoon::from_seed(b"password", [0; 32]);
         let wrapped = cocoon.wrap(b"data").expect("Wrapped container");
