@@ -131,7 +131,7 @@ impl MiniCocoon {
     pub fn from_password(password: &[u8], seed: &[u8]) -> Self {
         let config = CocoonConfig::default();
         let key = match config.kdf() {
-            CocoonKdf::Pbkdf2 => kdf::pbkdf2::derive(&seed, password, config.kdf_iterations()),
+            CocoonKdf::Pbkdf2 => kdf::pbkdf2::derive(seed, password, config.kdf_iterations()),
         };
 
         let mut s = [0u8; KEY_SIZE];
@@ -276,11 +276,11 @@ impl MiniCocoon {
         let tag: [u8; 16] = match self.config.cipher() {
             CocoonCipher::Chacha20Poly1305 => {
                 let cipher = ChaCha20Poly1305::new(&key);
-                cipher.encrypt_in_place_detached(nonce, &prefix.prefix(), data)
+                cipher.encrypt_in_place_detached(nonce, prefix.prefix(), data)
             }
             CocoonCipher::Aes256Gcm => {
                 let cipher = Aes256Gcm::new(&key);
-                cipher.encrypt_in_place_detached(nonce, &prefix.prefix(), data)
+                cipher.encrypt_in_place_detached(nonce, prefix.prefix(), data)
             }
         }
         .map_err(|_| Error::Cryptography)?
@@ -364,8 +364,7 @@ impl MiniCocoon {
     #[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
     pub fn parse(&self, reader: &mut impl Read) -> Result<Vec<u8>, Error> {
         let prefix = MiniFormatPrefix::deserialize_from(reader)?;
-        let mut body = Vec::with_capacity(prefix.header().data_length());
-        body.resize(body.capacity(), 0);
+        let mut body = vec![0; prefix.header().data_length()];
 
         // Too short error can be thrown right from here.
         reader.read_exact(&mut body)?;
@@ -421,16 +420,16 @@ impl MiniCocoon {
 
         let nonce = GenericArray::from_slice(&nonce);
         let master_key = GenericArray::clone_from_slice(self.key.as_ref());
-        let tag = GenericArray::from_slice(&detached_prefix.tag());
+        let tag = GenericArray::from_slice(detached_prefix.tag());
 
         match self.config.cipher() {
             CocoonCipher::Chacha20Poly1305 => {
                 let cipher = ChaCha20Poly1305::new(&master_key);
-                cipher.decrypt_in_place_detached(nonce, &detached_prefix.prefix(), data, tag)
+                cipher.decrypt_in_place_detached(nonce, detached_prefix.prefix(), data, tag)
             }
             CocoonCipher::Aes256Gcm => {
                 let cipher = Aes256Gcm::new(&master_key);
-                cipher.decrypt_in_place_detached(nonce, &detached_prefix.prefix(), data, tag)
+                cipher.decrypt_in_place_detached(nonce, detached_prefix.prefix(), data, tag)
             }
         }
         .map_err(|_| Error::Cryptography)?;
@@ -555,7 +554,7 @@ mod test {
         let mut wrapped = cocoon.wrap(b"data").expect("Wrapped container");
 
         let last = wrapped.len() - 1;
-        wrapped[last] = wrapped[last] + 1;
+        wrapped[last] += 1;
         cocoon.unwrap(&wrapped).expect_err("Unwrapped container");
     }
 

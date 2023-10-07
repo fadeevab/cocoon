@@ -47,7 +47,7 @@ impl FormatPrefix {
     }
 
     pub fn deserialize(start: &[u8]) -> Result<Self, Error> {
-        let header = CocoonHeader::deserialize(&start)?;
+        let header = CocoonHeader::deserialize(start)?;
 
         let mut raw = [0u8; MAX_SIZE];
 
@@ -124,7 +124,7 @@ impl MiniFormatPrefix {
     }
 
     pub fn deserialize(start: &[u8]) -> Result<Self, Error> {
-        let header = MiniCocoonHeader::deserialize(&start)?;
+        let header = MiniCocoonHeader::deserialize(start)?;
 
         let mut raw = [0u8; MINI_SIZE];
 

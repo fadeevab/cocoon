@@ -1,25 +1,26 @@
 [package]
 name = "cocoon"
 version = "0.3.2"
-description = "A simple protected container with strong encryption and format validation."
+
 authors = ["Alexander Fadeev <fadeevab.com@gmail.com>"]
-edition = "2018"
-license = "MIT"
-keywords = ["encryption", "storage", "keystore", "parser", "container"]
 categories = ["cryptography", "no-std", "parser-implementations"]
-homepage = "https://github.com/fadeevab/cocoon"
-repository = "https://github.com/fadeevab/cocoon"
+description = "A simple protected container with strong encryption and format validation."
 documentation = "https://docs.rs/cocoon"
+edition = "2018"
+homepage = "https://github.com/fadeevab/cocoon"
+keywords = ["encryption", "storage", "keystore", "parser", "container"]
+license = "MIT"
 readme = "README.md"
+repository = "https://github.com/fadeevab/cocoon"
 
 [dependencies]
-aes-gcm = { version = "0.10", default-features = false, features = ["aes"] }
-chacha20poly1305 = { version = "0.10", default-features = false }
+aes-gcm = {version = "0.10", default-features = false, features = ["aes"]}
+chacha20poly1305 = {version = "0.10", default-features = false}
 hmac = "0.11"
-pbkdf2 = { version = "0.9", default-features = false, features = ["sha2", "hmac"] }
-rand = { version = "0.8", default-features = false, features = ["std_rng"] }
-sha2 = { version = "0.9", default-features = false }
-zeroize = { version = "1", default-features = false }
+pbkdf2 = {version = "0.9", default-features = false, features = ["sha2", "hmac"]}
+rand = {version = "0.8", default-features = false, features = ["std_rng"]}
+sha2 = {version = "0.9", default-features = false}
+zeroize = {version = "1", default-features = false}
 
 [dev-dependencies]
 borsh = "0.9"
