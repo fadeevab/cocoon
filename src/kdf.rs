@@ -1,6 +1,6 @@
 pub const KEY_SIZE: usize = 32;
 pub const SALT_MIN_SIZE: usize = 16;
-pub const SALT_MAX_SIZE: usize = 64;
+pub const SALT_MAX_SIZE: usize = 128;
 
 /// A 256-bit key derived from a password using PBKDF2 (HMAC-SHA256) with guaranteed zeroization.
 pub mod pbkdf2 {
