@@ -721,12 +721,10 @@ impl<'a> Cocoon<'a, Creation> {
         match self.rng {
             #[cfg(feature = "std")]
             RngVariant::Thread(ref mut rng) => {
-                // let mut rng = rng.clone();
                 rng.fill_bytes(&mut salt);
                 rng.fill_bytes(&mut nonce);
             }
             RngVariant::Std(ref mut rng) => {
-                // let mut rng = rng.clone();
                 rng.fill_bytes(&mut salt);
                 rng.fill_bytes(&mut nonce);
             }
