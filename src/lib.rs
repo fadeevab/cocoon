@@ -70,7 +70,7 @@
 //! # fn main() -> Result<(), Error> {
 //! let mut data = b"my secret data".to_vec();
 //! let mut cocoon = Cocoon::new(b"password");
-//! # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+//! # let mut cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
 //! # let mut file = Cursor::new(vec![0; 150]);
 //!
 //! cocoon.dump(data, &mut file)?;
@@ -323,7 +323,7 @@ pub use mini::*;
 /// #
 /// # fn main() -> Result<(), Error> {
 /// let mut cocoon = Cocoon::new(b"password");
-/// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+/// # let mut cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
 ///
 /// let wrapped = cocoon.wrap(b"my secret data")?;
 /// assert_ne!(&wrapped, b"my secret data");
@@ -626,7 +626,7 @@ impl<'a> Cocoon<'a, Creation> {
     /// #
     /// # fn main() -> Result<(), Error> {
     /// let mut cocoon = Cocoon::new(b"password");
-    /// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+    /// # let mut cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
     ///
     /// let wrapped = cocoon.wrap(b"my secret data")?;
     /// assert_ne!(&wrapped, b"my secret data");
@@ -636,7 +636,7 @@ impl<'a> Cocoon<'a, Creation> {
     /// ```
     #[cfg(feature = "alloc")]
     #[cfg_attr(docs_rs, doc(cfg(any(feature = "alloc", feature = "std"))))]
-    pub fn wrap(&self, data: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn wrap(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
         // Allocation is needed because there is no way to prefix encrypted
         // data with a header without an allocation. It means that we need
         // to copy data at least once. It's necessary to avoid any further copying.
@@ -670,7 +670,7 @@ impl<'a> Cocoon<'a, Creation> {
     /// # fn main() -> Result<(), Error> {
     /// let mut data = b"my secret data".to_vec();
     /// let mut cocoon = Cocoon::new(b"password");
-    /// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+    /// # let mut cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
     /// # let mut file = Cursor::new(vec![0; 150]);
     ///
     /// cocoon.dump(data, &mut file)?;
@@ -680,7 +680,7 @@ impl<'a> Cocoon<'a, Creation> {
     /// # }
     #[cfg(feature = "std")]
     #[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
-    pub fn dump(&self, mut data: Vec<u8>, writer: &mut impl Write) -> Result<(), Error> {
+    pub fn dump(&mut self, mut data: Vec<u8>, writer: &mut impl Write) -> Result<(), Error> {
         let detached_prefix = self.encrypt(&mut data)?;
 
         writer.write_all(&detached_prefix)?;
@@ -707,26 +707,26 @@ impl<'a> Cocoon<'a, Creation> {
     /// # let mut good_rng = rand::rngs::ThreadRng::default();
     /// let mut data = "my secret data".to_owned().into_bytes();
     /// let mut cocoon = Cocoon::from_rng(b"password", good_rng).unwrap();
-    /// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+    /// # let mut cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
     ///
     /// let detached_prefix = cocoon.encrypt(&mut data)?;
     /// assert_ne!(data, b"my secret data");
     /// # Ok(())
     /// # }
     /// ```
-    pub fn encrypt(&self, data: &mut [u8]) -> Result<[u8; PREFIX_SIZE], Error> {
+    pub fn encrypt(&mut self, data: &mut [u8]) -> Result<[u8; PREFIX_SIZE], Error> {
         let mut salt = [0u8; 16];
         let mut nonce = [0u8; 12];
 
-        match &self.rng {
+        match self.rng {
             #[cfg(feature = "std")]
-            RngVariant::Thread(rng) => {
-                let mut rng = rng.clone();
+            RngVariant::Thread(ref mut rng) => {
+                // let mut rng = rng.clone();
                 rng.fill_bytes(&mut salt);
                 rng.fill_bytes(&mut nonce);
             }
-            RngVariant::Std(rng) => {
-                let mut rng = rng.clone();
+            RngVariant::Std(ref mut rng) => {
+                // let mut rng = rng.clone();
                 rng.fill_bytes(&mut salt);
                 rng.fill_bytes(&mut nonce);
             }
@@ -772,7 +772,7 @@ impl<'a, M> Cocoon<'a, M> {
     /// #
     /// # fn main() -> Result<(), Error> {
     /// let mut cocoon = Cocoon::new(b"password");
-    /// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+    /// # let mut cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
     ///
     /// # let wrapped = cocoon.wrap(b"my secret data")?;
     /// # assert_ne!(&wrapped, b"my secret data");
@@ -814,7 +814,7 @@ impl<'a, M> Cocoon<'a, M> {
     /// # fn main() -> Result<(), Error> {
     /// let mut data = b"my secret data".to_vec();
     /// let mut cocoon = Cocoon::new(b"password");
-    /// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+    /// # let mut cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
     /// # let mut file = Cursor::new(vec![0; 150]);
     ///
     /// # cocoon.dump(data, &mut file)?;
@@ -856,7 +856,7 @@ impl<'a, M> Cocoon<'a, M> {
     /// # let mut good_rng = rand::rngs::ThreadRng::default();
     /// let mut data = "my secret data".to_owned().into_bytes();
     /// let mut cocoon = Cocoon::from_rng(b"password", good_rng).unwrap();
-    /// # let cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
+    /// # let mut cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
     ///
     /// let detached_prefix = cocoon.encrypt(&mut data)?;
     /// assert_ne!(data, b"my secret data");
@@ -935,7 +935,7 @@ mod test {
         let mut cocoon = Cocoon::from_seed(b"password", [0; 32]).with_weak_kdf();
         let mut data = "my secret data".to_owned().into_bytes();
 
-        let detached_prefix = cocoon.encrypt(&mut data).unwrap();
+        let detached_prefix = &cocoon.encrypt(&mut data).unwrap();
 
         assert_eq!(
             &[
@@ -955,7 +955,8 @@ mod test {
         let mut cipher_data: Vec<Vec<u8>> = Vec::new();
         cipher_data.push(data.to_vec());
         for i in 0..100 {
-            cocoon.encrypt(&mut data).unwrap();
+            data = "my secret data".to_owned().into_bytes();
+            let _ = cocoon.encrypt(&mut data).unwrap();
             cipher_data.push(data.to_vec());
             assert_ne!(
                 &cipher_data.last().unwrap(),
@@ -987,6 +988,17 @@ mod test {
             &[88, 183, 11, 7, 192, 224, 203, 107, 144, 162, 48, 78, 61, 223],
             &data[..]
         );
+        let mut cipher_data: Vec<Vec<u8>> = Vec::new();
+        cipher_data.push(data.to_vec());
+        for i in 0..100 {
+            data = "my secret data".to_owned().into_bytes();
+            let _ = cocoon.encrypt(&mut data).unwrap();
+            cipher_data.push(data.to_vec());
+            assert_ne!(
+                &cipher_data.last().unwrap(),
+                &cipher_data.get(i).unwrap()
+                )
+        }
     }
 
     #[test]
@@ -999,7 +1011,7 @@ mod test {
         let mut data = [
             244, 85, 222, 144, 119, 169, 144, 11, 178, 216, 4, 57, 17, 47,
         ];
-        let mut cocoon = Cocoon::parse_only(b"password");
+        let cocoon = Cocoon::parse_only(b"password");
 
         cocoon
             .decrypt(&mut data, &detached_prefix)
@@ -1018,7 +1030,7 @@ mod test {
         let mut data = [
             88, 183, 11, 7, 192, 224, 203, 107, 144, 162, 48, 78, 61, 223,
         ];
-        let mut cocoon = Cocoon::parse_only(b"password");
+        let cocoon = Cocoon::parse_only(b"password");
 
         cocoon
             .decrypt(&mut data, &detached_prefix)
@@ -1084,7 +1096,7 @@ mod test {
         let mut data = [
             244, 85, 222, 144, 119, 169, 144, 11, 178, 216, 4, 57, 17, 47, 0,
         ];
-        let mut cocoon = Cocoon::parse_only(b"password");
+        let cocoon = Cocoon::parse_only(b"password");
 
         cocoon
             .decrypt(&mut data, &detached_prefix)
@@ -1146,7 +1158,7 @@ mod test {
         File::create(read_only_file.clone()).expect("Test file");
         let mut file = File::open(read_only_file).expect("Test file");
 
-        let mut cocoon = Cocoon::from_seed(b"password", [0; 32]).with_weak_kdf();
+        let cocoon = Cocoon::from_seed(b"password", [0; 32]).with_weak_kdf();
 
         match cocoon.parse(&mut file) {
             Err(e) => match e {

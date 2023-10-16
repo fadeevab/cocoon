@@ -265,6 +265,7 @@ impl MiniCocoon {
 
         let mut nonce = [0u8; 12];
         self.rng.fill_bytes(&mut nonce);
+        println!("nonce: {:?}", nonce);
 
         let header = MiniCocoonHeader::new(nonce, data.len());
         let prefix = MiniFormatPrefix::new(header);
@@ -469,6 +470,18 @@ mod test {
             &[98, 34, 35, 62, 28, 121, 71, 223, 170, 151, 215, 104, 52, 187],
             &data[..]
         );
+
+        let mut cipher_data: Vec<Vec<u8>> = Vec::new();
+        cipher_data.push(data.to_vec());
+        for i in 0..100 {
+            data = "my secret data".to_owned().into_bytes();
+            let _ = cocoon.encrypt(&mut data).unwrap();
+            cipher_data.push(data.to_vec());
+            assert_ne!(
+                &cipher_data.last().unwrap(),
+                &cipher_data.get(i).unwrap()
+                )
+        }
     }
 
     #[test]
@@ -491,6 +504,18 @@ mod test {
             &[41, 58, 226, 219, 28, 132, 21, 216, 165, 46, 246, 120, 10, 92],
             &data[..]
         );
+
+        let mut cipher_data: Vec<Vec<u8>> = Vec::new();
+        cipher_data.push(data.to_vec());
+        for i in 0..100 {
+            data = "my secret data".to_owned().into_bytes();
+            let _ = cocoon.encrypt(&mut data).unwrap();
+            cipher_data.push(data.to_vec());
+            assert_ne!(
+                &cipher_data.last().unwrap(),
+                &cipher_data.get(i).unwrap()
+                )
+        }
     }
 
     #[test]
@@ -502,7 +527,7 @@ mod test {
         let mut data = [
             224, 50, 239, 254, 30, 140, 44, 135, 217, 94, 127, 67, 78, 31,
         ];
-        let mut cocoon = MiniCocoon::from_password(b"password", &[0; 32]);
+        let cocoon = MiniCocoon::from_password(b"password", &[0; 32]);
 
         cocoon
             .decrypt(&mut data, &detached_prefix)
@@ -520,7 +545,7 @@ mod test {
         let mut data = [
             178, 119, 26, 64, 67, 5, 235, 21, 238, 150, 245, 172, 197, 114,
         ];
-        let mut cocoon =
+        let cocoon =
             MiniCocoon::from_password(b"password", &[0; 32]).with_cipher(CocoonCipher::Aes256Gcm);
 
         cocoon
@@ -541,7 +566,7 @@ mod test {
     #[test]
     fn mini_cocoon_wrap_unwrap() {
         let mut cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
-        let mut wrapped = cocoon.wrap(b"data").expect("Wrapped container");
+        let wrapped = cocoon.wrap(b"data").expect("Wrapped container");
         let original = cocoon.unwrap(&wrapped).expect("Unwrapped container");
 
         assert_eq!(original, b"data");
@@ -554,7 +579,7 @@ mod test {
 
         let last = wrapped.len() - 1;
         wrapped[last] += 1;
-        &cocoon.unwrap(&wrapped).expect_err("Unwrapped container");
+        let _ = &cocoon.unwrap(&wrapped).expect_err("Unwrapped container");
     }
 
     #[test]
@@ -586,7 +611,7 @@ mod test {
         let mut data = [
             178, 119, 26, 64, 67, 5, 235, 21, 238, 150, 245, 172, 197, 114, 0,
         ];
-        let mut cocoon =
+        let cocoon =
             MiniCocoon::from_password(b"password", &[0; 32]).with_cipher(CocoonCipher::Aes256Gcm);
 
         cocoon
@@ -649,7 +674,7 @@ mod test {
         File::create(read_only_file.clone()).expect("Test file");
         let mut file = File::open(read_only_file).expect("Test file");
 
-        let mut cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
+        let cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
 
         match cocoon.parse(&mut file) {
             Err(e) => match e {
