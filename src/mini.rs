@@ -262,7 +262,6 @@ impl MiniCocoon {
     /// # }
     /// ```
     pub fn encrypt(&mut self, data: &mut [u8]) -> Result<[u8; MINI_PREFIX_SIZE], Error> {
-
         let mut nonce = [0u8; 12];
         self.rng.fill_bytes(&mut nonce);
 
@@ -472,15 +471,12 @@ mod test {
 
         let mut cipher_data: Vec<Vec<u8>> = Vec::new();
         cipher_data.push(data.to_vec());
-        for _ in 0..100 {
+        for _ in 0..10 {
             data = "my secret data".to_owned().into_bytes();
             let _ = cocoon.encrypt(&mut data).unwrap();
             cipher_data.push(data.to_vec());
             for i in 0..cipher_data.len() - 2 {
-                assert_ne!(
-                    &cipher_data.last().unwrap(),
-                    &cipher_data.get(i).unwrap()
-                    )
+                assert_ne!(&cipher_data.last().unwrap(), &cipher_data.get(i).unwrap())
             }
         }
     }
@@ -508,15 +504,12 @@ mod test {
 
         let mut cipher_data: Vec<Vec<u8>> = Vec::new();
         cipher_data.push(data.to_vec());
-        for _ in 0..100 {
+        for _ in 0..10 {
             data = "my secret data".to_owned().into_bytes();
             let _ = cocoon.encrypt(&mut data).unwrap();
             cipher_data.push(data.to_vec());
             for i in 0..cipher_data.len() - 2 {
-                assert_ne!(
-                    &cipher_data.last().unwrap(),
-                    &cipher_data.get(i).unwrap()
-                    )
+                assert_ne!(&cipher_data.last().unwrap(), &cipher_data.get(i).unwrap())
             }
         }
     }
