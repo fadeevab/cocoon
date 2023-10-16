@@ -951,6 +951,17 @@ mod test {
             &[186, 240, 214, 29, 4, 147, 205, 72, 210, 7, 167, 234, 199, 53],
             &data[..]
         );
+
+        let mut cipher_data: Vec<Vec<u8>> = Vec::new();
+        cipher_data.push(data.to_vec());
+        for i in 0..100 {
+            cocoon.encrypt(&mut data).unwrap();
+            cipher_data.push(data.to_vec());
+            assert_ne!(
+                &cipher_data.last().unwrap(),
+                &cipher_data.get(i).unwrap()
+                )
+        }
     }
 
     #[test]
