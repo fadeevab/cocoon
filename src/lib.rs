@@ -365,7 +365,7 @@ pub use mini::*;
 /// // Attention: don't use a weak password in real life!
 /// let password = [1, 2, 3, 4, 5, 6];
 ///
-/// let mut cocoon = if cfg!(debug_assertions) {
+/// let cocoon = if cfg!(debug_assertions) {
 ///     Cocoon::new(&password).with_weak_kdf()
 /// } else {
 ///     Cocoon::new(&password)
@@ -546,7 +546,7 @@ impl<'a> Cocoon<'a, Parsing> {
     /// ```compile_fail
     /// use cocoon::Cocoon;
     ///
-    /// let mut cocoon = Cocoon::parse_only(b"password");
+    /// let cocoon = Cocoon::parse_only(b"password");
     ///
     /// // The compilation process fails here denying to use any encryption method.
     /// cocoon.wrap(b"my data");
@@ -557,7 +557,7 @@ impl<'a> Cocoon<'a, Parsing> {
     /// use cocoon::{Cocoon, Error};
     ///
     /// # fn main() -> Result<(), Error> {
-    /// let mut cocoon = Cocoon::parse_only(b"password");
+    /// let cocoon = Cocoon::parse_only(b"password");
     ///
     /// # let mut data = [
     /// #     244, 85, 222, 144, 119, 169, 144, 11, 178, 216, 4, 57, 17, 47, 0,
@@ -769,7 +769,7 @@ impl<'a, M> Cocoon<'a, M> {
     /// # use cocoon::{Cocoon, Error};
     /// #
     /// # fn main() -> Result<(), Error> {
-    /// let mut cocoon = Cocoon::new(b"password");
+    /// let cocoon = Cocoon::new(b"password");
     /// # let mut cocoon = cocoon.with_weak_kdf(); // Speed up doc tests.
     ///
     /// # let wrapped = cocoon.wrap(b"my secret data")?;
