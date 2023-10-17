@@ -245,7 +245,7 @@ impl MiniCocoon {
     /// This method doesn't use memory allocation and it is suitable in the build
     /// with no [`std`] and no [`alloc`].
     ///
-    /// <img src="../../../images/cocoon_detached_prefix.svg" />
+    /// <img alt="Detached prefix" src="https://github.com/fadeevab/cocoon/raw/main/images/cocoon_detached_prefix.svg" />
     ///
     /// # Examples
     /// ```

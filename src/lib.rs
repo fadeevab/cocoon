@@ -1,6 +1,6 @@
 //! # Cocoon
 //!
-//! <img alt="Cocoon format" src="https://github.com/fadeevab/cocoon/raw/master/images/cocoon_format.svg" />
+//! <img alt="Cocoon format" src="https://github.com/fadeevab/cocoon/raw/main/images/cocoon_format.svg" />
 //!
 //! [`MiniCocoon`] and [`Cocoon`] are protected containers to wrap sensitive data with strong
 //! [encryption](#cryptography) and format validation. A format of [`MiniCocoon`] and [`Cocoon`]
@@ -217,12 +217,12 @@
 //! master key, and a _nonce_ is used for AEAD encryption. All arrays are put
 //! into a header which prefixes the final container.
 //!
-//! <img alt="Salt and nonce" src="https://github.com/fadeevab/cocoon/raw/master/images/cocoon_creation_rng.svg" />
+//! <img alt="Salt and nonce" src="https://github.com/fadeevab/cocoon/raw/main/images/cocoon_creation_rng.svg" />
 //!
 //! Then a _master key_ is derived from a password using selected Key Derivation Function
 //! (KDF, e.g. PBKDF2) and a random salt.
 //!
-//! <img alt="Master key" src="https://github.com/fadeevab/cocoon/raw/master/images/cocoon_creation_key.svg" />
+//! <img alt="Master key" src="https://github.com/fadeevab/cocoon/raw/main/images/cocoon_creation_key.svg" />
 //!
 //! At this moment we have everything to encrypt data and to create a container.
 //! Authenticated Encryption with Associated Data (AEAD) is used to encrypt data and to produce
@@ -231,7 +231,7 @@
 //! certain cases, e.g. it allows to work on stack, makes API more flexible, gets additional
 //! control over the container format.
 //!
-//! <img alt="Cocoon creation" src="https://github.com/fadeevab/cocoon/raw/master/images/cocoon_encryption.svg" />
+//! <img alt="Cocoon creation" src="https://github.com/fadeevab/cocoon/raw/main/images/cocoon_encryption.svg" />
 //!
 //! Container can be dumped to file, or it can be kept in the buffer.
 //!
@@ -240,7 +240,7 @@
 //! It starts from header parsing because random material is needed to restore a master key in
 //! order to decrypt a data.
 //!
-//! <img alt="Cocoon header parsing" src="https://github.com/fadeevab/cocoon/raw/master/images/cocoon_header_parsing.svg" />
+//! <img alt="Cocoon header parsing" src="https://github.com/fadeevab/cocoon/raw/main/images/cocoon_header_parsing.svg" />
 //!
 //! Random generator is not needed in this case. (That's why [`Cocoon::parse_only`] is provided
 //! as an alternative way to initialize [`Cocoon`] to only parse a container without necessity
@@ -248,11 +248,11 @@
 //!
 //! A master key is derived from a password and a salt.
 //!
-//! <img alt="Master key generation" src="https://github.com/fadeevab/cocoon/raw/master/images/cocoon_creation_key.svg" />
+//! <img alt="Master key generation" src="https://github.com/fadeevab/cocoon/raw/main/images/cocoon_creation_key.svg" />
 //!
 //! Finally, integrity of all parts is verified and data is decrypted.
 //!
-//! <img alt="Cocoon parsing" src="https://github.com/fadeevab/cocoon/raw/master/images/cocoon_parsing.svg" />
+//! <img alt="Cocoon parsing" src="https://github.com/fadeevab/cocoon/raw/main/images/cocoon_parsing.svg" />
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs, unused_qualifications)]
@@ -700,7 +700,7 @@ impl<'a> Cocoon<'a, Creation> {
     /// This method doesn't use memory allocation and it is suitable in the build
     /// with no [`std`] and no [`alloc`].
     ///
-    /// <img src="../../../images/cocoon_detached_prefix.svg" />
+    /// <img alt="Detached prefix" src="https://github.com/fadeevab/cocoon/raw/main/images/cocoon_detached_prefix.svg" />
     ///
     /// # Examples
     /// ```

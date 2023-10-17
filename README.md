@@ -24,7 +24,7 @@ flawlessly. It has a minimal set of dependencies and a minimalist design to simp
 security aspects. It's a pure Rust implementation, and all dependencies are pure Rust
 packages with disabled default features.
 
-# Problem
+# Use Case
 
 Whenever you need to transmit and store data securely you reinvent the wheel: you have to
 take care of how to encrypt data properly, how to handle randomly generated buffers,
@@ -44,7 +44,7 @@ because it generates a container with a smaller header without version control, 
 it allows to wrap data sequentially (wrap, wrap, wrap!) without performance drop
 because of KDF calculation.
 ```rust
-let cocoon = MiniCocoon::from_key(b"0123456789abcdef0123456789abcdef", &[0; 32]);
+let mut cocoon = MiniCocoon::from_key(b"0123456789abcdef0123456789abcdef", &[0; 32]);
 
 let wrapped = cocoon.wrap(b"my secret data")?;
 assert_ne!(&wrapped, b"my secret data");
@@ -62,7 +62,7 @@ encrypted _in place_ and stored in a file using the "cocoon" [format](#cocoon).
 number, options, and version control.
 ```rust
 let mut data = b"my secret data".to_vec();
-let cocoon = Cocoon::new(b"password");
+let mut cocoon = Cocoon::new(b"password");
 
 cocoon.dump(data, &mut file)?;
 
@@ -82,7 +82,7 @@ Both `MiniCocoon` and `Cocoon` have the same API, but prefixes are of different 
 it's recommended for simple sequential encryption/decryption operations.
 ```rust
 let mut data = "my secret data".to_owned().into_bytes();
-let cocoon = MiniCocoon::from_key(b"0123456789abcdef0123456789abcdef", &[0; 32]);
+let mut cocoon = MiniCocoon::from_key(b"0123456789abcdef0123456789abcdef", &[0; 32]);
 
 let detached_prefix = cocoon.encrypt(&mut data)?;
 assert_ne!(data, b"my secret data");
@@ -101,14 +101,14 @@ to serialize the data. You can even compress a serialized buffer before encrypti
 In the end, you use `Cocoon` to put the final image into an encrypted container.
 
 ```rust
-use borsh::BorshSerialize;
+use borsh::{BorshDeserialize, BorshSerialize};
 use cocoon::{Cocoon, Error};
 
 use std::collections::HashMap;
 use std::fs::File;
 
 // Your data can be represented in any way.
-#[derive(BorshSerialize)]
+#[derive(BorshDeserialize, BorshSerialize)]
 struct Database {
     inner: HashMap<String, String>,
 }
@@ -124,10 +124,10 @@ fn main() -> Result<(), Error> {
     let encoded = db.try_to_vec().unwrap();
 
     // Finally, you want to store your data secretly.
-    // Supply some password to Cocoon: password is any byte array, basically.
+    // Supply some password to Cocoon: it can be any byte array, basically.
     // Don't use a hard-coded password in real life!
     // It could be a user-supplied password.
-    let cocoon = Cocoon::new(b"secret password");
+    let mut cocoon = Cocoon::new(b"secret password");
 
     // Dump the serialized database into a file as an encrypted container.
     let container = cocoon.dump(encoded, &mut file)?;
