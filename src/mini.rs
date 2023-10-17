@@ -34,7 +34,7 @@ pub struct MiniCocoon {
 /// # use cocoon::{MiniCocoon, Error};
 /// #
 /// # fn main() -> Result<(), Error> {
-/// let cocoon = MiniCocoon::from_key(b"0123456789abcdef0123456789abcdef", &[0; 32]);
+/// let mut cocoon = MiniCocoon::from_key(b"0123456789abcdef0123456789abcdef", &[0; 32]);
 ///
 /// let wrapped = cocoon.wrap(b"my secret data")?;
 /// assert_ne!(&wrapped, b"my secret data");
@@ -92,7 +92,7 @@ impl MiniCocoon {
     /// // Key must be 32 bytes of length. Let it be another 32 random bytes.
     /// let key = rand::thread_rng().gen::<[u8; 32]>();
     ///
-    /// let cocoon = MiniCocoon::from_key(&key, &seed);
+    /// let mut cocoon = MiniCocoon::from_key(&key, &seed);
     /// ```
     pub fn from_key(key: &[u8], seed: &[u8]) -> Self {
         let mut k = [0u8; KEY_SIZE];
@@ -126,7 +126,7 @@ impl MiniCocoon {
     /// // ThreadRng is used as an example.
     /// let seed = rand::thread_rng().gen::<[u8; 32]>();
     ///
-    /// let cocoon = MiniCocoon::from_password(b"my password", &seed);
+    /// let mut cocoon = MiniCocoon::from_password(b"my password", &seed);
     /// ```
     pub fn from_password(password: &[u8], seed: &[u8]) -> Self {
         let config = CocoonConfig::default();
@@ -152,7 +152,7 @@ impl MiniCocoon {
     /// let seed = rand::thread_rng().gen::<[u8; 32]>();
     /// let key = rand::thread_rng().gen::<[u8; 32]>();
     ///
-    /// let cocoon = MiniCocoon::from_key(&key, &seed).with_cipher(CocoonCipher::Chacha20Poly1305);
+    /// let mut cocoon = MiniCocoon::from_key(&key, &seed).with_cipher(CocoonCipher::Chacha20Poly1305);
     /// cocoon.wrap(b"my secret data");
     /// ```
     pub fn with_cipher(mut self, cipher: CocoonCipher) -> Self {
@@ -171,7 +171,7 @@ impl MiniCocoon {
     /// #
     /// # fn main() -> Result<(), Error> {
     /// let seed = rand::thread_rng().gen::<[u8; 32]>();
-    /// let cocoon = MiniCocoon::from_password(b"password", &seed);
+    /// let mut cocoon = MiniCocoon::from_password(b"password", &seed);
     ///
     /// let wrapped = cocoon.wrap(b"my secret data")?;
     /// assert_ne!(&wrapped, b"my secret data");
@@ -181,7 +181,7 @@ impl MiniCocoon {
     /// ```
     #[cfg(feature = "alloc")]
     #[cfg_attr(docs_rs, doc(cfg(any(feature = "alloc", feature = "std"))))]
-    pub fn wrap(&self, data: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn wrap(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
         // Allocation is needed because there is no way to prefix encrypted
         // data with a header without an allocation. It means that we need
         // to copy data at least once. It's necessary to avoid any further copying.
@@ -218,7 +218,7 @@ impl MiniCocoon {
     ///            17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
     /// let seed = rand::thread_rng().gen::<[u8; 32]>();
     ///
-    /// let cocoon = MiniCocoon::from_key(&key, &seed);
+    /// let mut cocoon = MiniCocoon::from_key(&key, &seed);
     /// # let mut file = Cursor::new(vec![0; 150]);
     ///
     /// let mut data = b"my secret data".to_vec();
@@ -230,7 +230,7 @@ impl MiniCocoon {
     /// # }
     #[cfg(feature = "std")]
     #[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
-    pub fn dump(&self, mut data: Vec<u8>, writer: &mut impl Write) -> Result<(), Error> {
+    pub fn dump(&mut self, mut data: Vec<u8>, writer: &mut impl Write) -> Result<(), Error> {
         let detached_prefix = self.encrypt(&mut data)?;
 
         writer.write_all(&detached_prefix)?;
@@ -252,7 +252,7 @@ impl MiniCocoon {
     /// # use cocoon::{MiniCocoon, Error};
     /// #
     /// # fn main() -> Result<(), Error> {
-    /// let cocoon = MiniCocoon::from_password(b"password", &[1; 32]);
+    /// let mut cocoon = MiniCocoon::from_password(b"password", &[1; 32]);
     ///
     /// let mut data = "my secret data".to_owned().into_bytes();
     ///
@@ -261,11 +261,9 @@ impl MiniCocoon {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn encrypt(&self, data: &mut [u8]) -> Result<[u8; MINI_PREFIX_SIZE], Error> {
-        let mut rng = self.rng.clone();
-
+    pub fn encrypt(&mut self, data: &mut [u8]) -> Result<[u8; MINI_PREFIX_SIZE], Error> {
         let mut nonce = [0u8; 12];
-        rng.fill_bytes(&mut nonce);
+        self.rng.fill_bytes(&mut nonce);
 
         let header = MiniCocoonHeader::new(nonce, data.len());
         let prefix = MiniFormatPrefix::new(header);
@@ -300,7 +298,7 @@ impl MiniCocoon {
     /// let key = b"0123456789abcdef0123456789abcdef";
     /// let seed = rand::thread_rng().gen::<[u8; 32]>();
     ///
-    /// let cocoon = MiniCocoon::from_key(key, &seed);
+    /// let mut cocoon = MiniCocoon::from_key(key, &seed);
     ///
     /// # let wrapped = cocoon.wrap(b"my secret data")?;
     /// # assert_ne!(&wrapped, b"my secret data");
@@ -344,7 +342,7 @@ impl MiniCocoon {
     /// let key = b"0123456789abcdef0123456789abcdef";
     /// let seed = rand::thread_rng().gen::<[u8; 32]>();
     ///
-    /// let cocoon = MiniCocoon::from_key(key, &seed);
+    /// let mut cocoon = MiniCocoon::from_key(key, &seed);
     /// # let mut file = Cursor::new(vec![0; 150]);
     /// #
     /// # let mut data = b"my secret data".to_vec();
@@ -384,7 +382,7 @@ impl MiniCocoon {
     /// #
     /// # fn main() -> Result<(), Error> {
     /// let mut data = "my secret data".to_owned().into_bytes();
-    /// let cocoon = MiniCocoon::from_password(b"password", &[0; 32]);
+    /// let mut cocoon = MiniCocoon::from_password(b"password", &[0; 32]);
     ///
     /// let detached_prefix = cocoon.encrypt(&mut data)?;
     /// assert_ne!(data, b"my secret data");
@@ -453,7 +451,7 @@ mod test {
 
     #[test]
     fn mini_cocoon_encrypt() {
-        let cocoon = MiniCocoon::from_password(b"password", &[0; 32]);
+        let mut cocoon = MiniCocoon::from_password(b"password", &[0; 32]);
         let mut data = "my secret data".to_owned().into_bytes();
 
         let detached_prefix = cocoon.encrypt(&mut data).unwrap();
@@ -470,11 +468,22 @@ mod test {
             &[98, 34, 35, 62, 28, 121, 71, 223, 170, 151, 215, 104, 52, 187],
             &data[..]
         );
+
+        let mut cipher_data: Vec<Vec<u8>> = Vec::new();
+        cipher_data.push(data.to_vec());
+        for _ in 0..10 {
+            data = "my secret data".to_owned().into_bytes();
+            let _ = cocoon.encrypt(&mut data).unwrap();
+            cipher_data.push(data.to_vec());
+            for i in 0..cipher_data.len() - 2 {
+                assert_ne!(&cipher_data.last().unwrap(), &cipher_data.get(i).unwrap())
+            }
+        }
     }
 
     #[test]
     fn mini_cocoon_encrypt_aes() {
-        let cocoon =
+        let mut cocoon =
             MiniCocoon::from_password(b"password", &[0; 32]).with_cipher(CocoonCipher::Aes256Gcm);
         let mut data = "my secret data".to_owned().into_bytes();
 
@@ -492,6 +501,17 @@ mod test {
             &[41, 58, 226, 219, 28, 132, 21, 216, 165, 46, 246, 120, 10, 92],
             &data[..]
         );
+
+        let mut cipher_data: Vec<Vec<u8>> = Vec::new();
+        cipher_data.push(data.to_vec());
+        for _ in 0..10 {
+            data = "my secret data".to_owned().into_bytes();
+            let _ = cocoon.encrypt(&mut data).unwrap();
+            cipher_data.push(data.to_vec());
+            for i in 0..cipher_data.len() - 2 {
+                assert_ne!(&cipher_data.last().unwrap(), &cipher_data.get(i).unwrap())
+            }
+        }
     }
 
     #[test]
@@ -533,7 +553,7 @@ mod test {
 
     #[test]
     fn mini_cocoon_wrap() {
-        let cocoon = MiniCocoon::from_password(b"password", &[0; 32]);
+        let mut cocoon = MiniCocoon::from_password(b"password", &[0; 32]);
         let wrapped = cocoon.wrap(b"data").expect("Wrapped container");
 
         assert_eq!(wrapped[wrapped.len() - 4..], [107, 58, 119, 44]);
@@ -541,7 +561,7 @@ mod test {
 
     #[test]
     fn mini_cocoon_wrap_unwrap() {
-        let cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
+        let mut cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
         let wrapped = cocoon.wrap(b"data").expect("Wrapped container");
         let original = cocoon.unwrap(&wrapped).expect("Unwrapped container");
 
@@ -550,17 +570,17 @@ mod test {
 
     #[test]
     fn mini_cocoon_wrap_unwrap_corrupted() {
-        let cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
+        let mut cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
         let mut wrapped = cocoon.wrap(b"data").expect("Wrapped container");
 
         let last = wrapped.len() - 1;
         wrapped[last] += 1;
-        cocoon.unwrap(&wrapped).expect_err("Unwrapped container");
+        let _ = &cocoon.unwrap(&wrapped).expect_err("Unwrapped container");
     }
 
     #[test]
     fn mini_cocoon_unwrap_larger_is_ok() {
-        let cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
+        let mut cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
         let mut wrapped = cocoon.wrap(b"data").expect("Wrapped container");
 
         wrapped.push(0);
@@ -571,7 +591,7 @@ mod test {
 
     #[test]
     fn mini_cocoon_unwrap_too_short() {
-        let cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
+        let mut cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
         let mut wrapped = cocoon.wrap(b"data").expect("Wrapped container");
 
         wrapped.pop();
@@ -605,7 +625,7 @@ mod test {
     fn mini_cocoon_dump_parse() {
         let buf = vec![0; 100];
         let mut file = Cursor::new(buf);
-        let cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
+        let mut cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
 
         // Prepare data inside of `Vec` container.
         let data = b"my data".to_vec();
@@ -628,7 +648,7 @@ mod test {
         File::create(read_only_file.clone()).expect("Test file");
         let mut file = File::open(read_only_file).expect("Test file");
 
-        let cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
+        let mut cocoon = MiniCocoon::from_key(&[1; 32], &[0; 32]);
 
         // Prepare data inside of `Vec` container.
         let data = b"my data".to_vec();
