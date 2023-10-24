@@ -1,4 +1,4 @@
-[![Cocoon](https://github.com/fadeevab/cocoon/workflows/Cocoon/badge.svg?event=push)](https://github.com/fadeevab/cocoon)
+[![Cocoon](https://github.com/fadeevab/cocoon/workflows/Cocoon/badge.svg)](https://github.com/fadeevab/cocoon)
 [![crates.io](https://img.shields.io/crates/v/cocoon.svg)](https://crates.io/crates/cocoon)
 [![docs.rs](https://docs.rs/cocoon/badge.svg)](https://docs.rs/cocoon/)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/fadeevab/cocoon/LICENSE)
