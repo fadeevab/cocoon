@@ -20,6 +20,7 @@ hmac = "0.11"
 pbkdf2 = {version = "0.9", default-features = false, features = ["sha2", "hmac"]}
 rand = {version = "0.8", default-features = false, features = ["std_rng"]}
 sha2 = {version = "0.9", default-features = false}
+thiserror = {version = "1.0.61", optional = true}
 zeroize = {version = "1", default-features = false}
 
 [dev-dependencies]
@@ -31,7 +32,7 @@ default = ["std"]
 
 # Enables all features, including support of simplified Cocoon API, using `rand::thread_rng`,
 # and API related to `std::io`: wrap to writer, unwrap from reader.
-std = ["alloc", "rand/std"]
+std = ["alloc", "rand/std", "dep:thiserror"]
 
 # Enables `Vec` container. Can be used without `std` crate (in "no std" build).
 alloc = ["chacha20poly1305/alloc"]
