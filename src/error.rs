@@ -20,7 +20,7 @@ pub enum Error {
     TooLarge,
     /// Buffer is too short and barely holds all data to decrypt, inconsistent length
     /// encoded to the header.
-    #[cfg_attr(feature = "std", error("Insufficient buffer size for decyrpted data"))]
+    #[cfg_attr(feature = "std", error("Insufficient buffer size for decrypted data"))]
     TooShort,
 }
 
