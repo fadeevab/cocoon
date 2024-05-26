@@ -41,8 +41,7 @@ jobs:
           -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code
           -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
         RUSTDOCFLAGS: >-
-          -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code
-          -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
+          -Cpanic=abort
       run: cargo test --all-features
     - name: Install grcov
       run: |
