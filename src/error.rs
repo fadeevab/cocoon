@@ -27,3 +27,17 @@ impl From<std::io::Error> for Error {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::Error;
+
+    #[test]
+    fn test_error() {
+        let err: Error = std::io::Error::from(std::io::ErrorKind::UnexpectedEof).into();
+        match err {
+            Error::TooShort => (),
+            _ => panic!("Unexpected error: not TooShort"),
+        }
+    }
+}
