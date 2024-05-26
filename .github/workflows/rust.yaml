@@ -52,8 +52,8 @@ jobs:
       run: |
         mkdir coverage
         ./grcov ./target/debug/ -s . -t lcov --llvm --branch --ignore-not-existing --ignore "/*" \
-                --excl-line '#\[|=> panic!|unreachable!|Io\(std::io::Error\)|//!|///' \
-                --excl-br-line '#\[|=> panic!|unreachable!|assert_..!|//!|///' -o ./coverage/lcov.info
+                --excl-line '#\[|unreachable!|Io\(std::io::Error\)|//!|///' \
+                --excl-br-line '#\[|unreachable!|assert_..!|//!|///' -o ./coverage/lcov.info
     - name: Send to Coveralls
       uses: coverallsapp/github-action@master
       with:
