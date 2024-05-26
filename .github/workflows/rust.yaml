@@ -41,7 +41,8 @@ jobs:
           -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code
           -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
         RUSTDOCFLAGS: >-
-          -Cpanic=abort
+          -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code
+          -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
       run: cargo test --all-features
     - name: Install grcov
       run: |
@@ -51,7 +52,7 @@ jobs:
       run: |
         mkdir coverage
         ./grcov ./target/debug/ -s . -t lcov --llvm --branch --ignore-not-existing \
-                --ignore "/*" \
+                --ignore "/*" --ignore "src/error.rs" \
                 --excl-line '#\[|=> panic!|unreachable!|Io\(std::io::Error\)|//!|///|^[ }]*$' \
                 --excl-br-line '#\[|=> panic!|unreachable!|assert_..!|//!|///' -o ./coverage/lcov.info
     - name: Send to Coveralls
