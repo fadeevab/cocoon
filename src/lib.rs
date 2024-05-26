@@ -1163,7 +1163,7 @@ mod test {
 
         match cocoon.parse(&mut file) {
             Err(e) => match e {
-                Error::TooShort => println!("Good!"),
+                Error::TooShort => println!("As expected: {:?}", Error::TooShort),
                 _ => panic!("TooShort is expected for an empty file"),
             },
             _ => panic!("Success is not expected"),
