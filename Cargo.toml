@@ -1,6 +1,6 @@
 [package]
 name = "cocoon"
-version = "0.4.1"
+version = "0.4.2"
 
 authors = ["Alexander Fadeev <fadeevab.com@gmail.com>"]
 categories = ["cryptography", "no-std", "parser-implementations"]
