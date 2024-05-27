@@ -172,6 +172,7 @@
 //! | `std`        | Enables almost all API, including I/O, excluding `getrandom` feature.        |
 //! | `alloc`      | Enables API with memory allocation, but without [`std`] dependency.          |
 //! | `getrandom`  | Enables [`Cocoon::from_entropy`].                                            |
+//! | `thiserror`  | Derives [`std::error::Error`] for [`cocoon::Error`](Error) via [`thiserror`].|
 //! |  no features | Creation and decryption a cocoon on the stack with no thread RNG, I/O, heap. |
 //!
 //! `std` is enabled by default, so you can just link the `cocoon` to you project:
@@ -418,7 +419,7 @@ pub use mini::*;
 /// | [`Cocoon::dump`]            | ✔️    | ❌      | ❌      |
 /// | [`Cocoon::parse`][^2]       | ✔️    | ❌      | ❌      |
 ///
-/// [^1]: [`from_entropy`](Cocoon:from_entropy) is enabled when `getrandom` feature is enabled.
+/// [^1]: [`from_entropy`](Cocoon::from_entropy) is enabled when `getrandom` feature is enabled.
 ///
 /// [^2]: [`parse_only`](Cocoon::parse_only) makes decryption API accessible only.
 pub struct Cocoon<'a, M> {
