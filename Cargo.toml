@@ -20,6 +20,7 @@ hmac = "0.11"
 pbkdf2 = {version = "0.9", default-features = false, features = ["sha2", "hmac"]}
 rand = {version = "0.8", default-features = false, features = ["std_rng"]}
 sha2 = {version = "0.9", default-features = false}
+thiserror = {version = "1.0.61", optional = true}
 zeroize = {version = "1", default-features = false}
 
 [dev-dependencies]
