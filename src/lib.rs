@@ -292,6 +292,7 @@ use header::{CocoonConfig, CocoonHeader};
 
 // Enumeration is needed to avoid dynamic allocation (important for "nostd" build).
 #[allow(clippy::large_enum_variant)]
+#[derive(Clone)]
 enum RngVariant {
     #[cfg(feature = "std")]
     Thread(ThreadRng),
@@ -422,6 +423,7 @@ pub use mini::*;
 /// [^1]: [`from_entropy`](Cocoon::from_entropy) is enabled when `getrandom` feature is enabled.
 ///
 /// [^2]: [`parse_only`](Cocoon::parse_only) makes decryption API accessible only.
+#[derive(Clone)]
 pub struct Cocoon<'a, M> {
     password: &'a [u8],
     rng: RngVariant,
