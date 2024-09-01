@@ -11,34 +11,33 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Run Rustfmt
-      run: cargo fmt -- --check
-    - name: Build
-      run: cargo build --verbose
-    - name: Build with no default features
-      run: cargo build --no-default-features
-    - name: Build with only "alloc" feature
-      run: cargo build --no-default-features --features="alloc"
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v2
+      - name: Run Rustfmt
+        run: cargo fmt -- --check
+      - name: Build
+        run: cargo build --verbose
+      - name: Build with no default features
+        run: cargo build --no-default-features
+      - name: Build with only "alloc" feature
+        run: cargo build --no-default-features --features="alloc"
+      - name: Run tests
+        run: cargo test --verbose
 
   coverage:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
-    - name: Install Rust
-      run: rustup update stable
-    - name: Install cargo-llvm-cov
-      uses: taiki-e/install-action@cargo-llvm-cov
-    - name: Generate code coverage
-      run: mkdir coverage && cargo llvm-cov --tests --all-features --lcov --output-path ./coverage/lcov.info
-    - name: Send to Coveralls
-      uses: coverallsapp/github-action@master
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: rustup update stable
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Generate code coverage
+        run: mkdir coverage && cargo llvm-cov --tests --all-features --lcov --output-path ./coverage/lcov.info
+      - name: Send to Coveralls
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
