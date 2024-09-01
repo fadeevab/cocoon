@@ -454,16 +454,15 @@ mod test {
     fn mini_cocoon_clone() {
         let mut cocoon = MiniCocoon::from_password(b"password", &[0; 32]);
         let cloned_cocoon = cocoon.clone();
-        const DATA : &'static [u8]= b"my-sercet-data";
+        const DATA: &'static [u8] = b"my-sercet-data";
 
         // To check whether MiniCocoon gets cloned properly
         let wrapped = cocoon.wrap(DATA).unwrap();
         drop(cocoon);
 
         let unwrapped = cloned_cocoon.unwrap(&wrapped).unwrap();
-        assert_eq!(&unwrapped,DATA);
+        assert_eq!(&unwrapped, DATA);
     }
-
 
     #[test]
     fn mini_cocoon_encrypt() {
