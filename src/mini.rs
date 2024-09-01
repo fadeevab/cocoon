@@ -21,6 +21,7 @@ use super::{
 pub const MINI_PREFIX_SIZE: usize = MiniFormatPrefix::SERIALIZE_SIZE;
 
 /// This is a mini cocoon for a convenient and cool encryption.
+#[derive(Clone)]
 pub struct MiniCocoon {
     key: Zeroizing<[u8; KEY_SIZE]>,
     rng: StdRng,
