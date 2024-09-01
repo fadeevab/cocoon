@@ -11,51 +11,33 @@ on:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Run Rustfmt
-      run: cargo fmt -- --check
-    - name: Build
-      run: cargo build --verbose
-    - name: Build with no default features
-      run: cargo build --no-default-features
-    - name: Build with only "alloc" feature
-      run: cargo build --no-default-features --features="alloc"
-    - name: Run tests
-      run: cargo test --verbose
+      - uses: actions/checkout@v2
+      - name: Run Rustfmt
+        run: cargo fmt -- --check
+      - name: Build
+        run: cargo build --verbose
+      - name: Build with no default features
+        run: cargo build --no-default-features
+      - name: Build with only "alloc" feature
+        run: cargo build --no-default-features --features="alloc"
+      - name: Run tests
+        run: cargo test --verbose
 
   coverage:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Select Rust nightly build
-      run: rustup default nightly
-    - name: Test with profiling
-      env:
-        CARGO_INCREMENTAL: 0
-        RUSTFLAGS: >-
-          -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code
-          -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
-        RUSTDOCFLAGS: >-
-          -Zprofile -Ccodegen-units=1 -Copt-level=0 -Clink-dead-code
-          -Coverflow-checks=off -Zpanic_abort_tests -Cpanic=abort
-      run: cargo test --all-features
-    - name: Install grcov
-      run: |
-        curl -L https://github.com/mozilla/grcov/releases/latest/download/grcov-x86_64-unknown-linux-gnu.tar.bz2 \
-          | tar jxf -
-    - name: Run grcov
-      run: |
-        mkdir coverage
-        ./grcov ./target/debug/ -s . -t lcov --llvm --branch --ignore-not-existing \
-                --ignore "/*" --ignore "src/error.rs" \
-                --excl-line '#\[|=> panic!|unreachable!|Io\(std::io::Error\)|//!|///|^[ }]*$' \
-                --excl-br-line '#\[|=> panic!|unreachable!|assert_..!|//!|///' -o ./coverage/lcov.info
-    - name: Send to Coveralls
-      uses: coverallsapp/github-action@master
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: rustup update stable
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Generate code coverage
+        run: mkdir coverage && cargo llvm-cov --tests --all-features --lcov --output-path ./coverage/lcov.info
+      - name: Send to Coveralls
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
