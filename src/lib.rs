@@ -271,8 +271,8 @@ extern crate alloc;
 
 use aes_gcm::{Aes256Gcm, KeyInit};
 use chacha20poly1305::{
-    aead::{generic_array::GenericArray, AeadInPlace},
     ChaCha20Poly1305,
+    aead::{AeadInPlace, generic_array::GenericArray},
 };
 #[cfg(feature = "std")]
 use rand::rngs::ThreadRng;
@@ -951,7 +951,9 @@ mod test {
         );
 
         assert_eq!(
-            &[186, 240, 214, 29, 4, 147, 205, 72, 210, 7, 167, 234, 199, 53],
+            &[
+                186, 240, 214, 29, 4, 147, 205, 72, 210, 7, 167, 234, 199, 53
+            ],
             &data[..]
         );
 
@@ -987,7 +989,9 @@ mod test {
         );
 
         assert_eq!(
-            &[88, 183, 11, 7, 192, 224, 203, 107, 144, 162, 48, 78, 61, 223],
+            &[
+                88, 183, 11, 7, 192, 224, 203, 107, 144, 162, 48, 78, 61, 223
+            ],
             &data[..]
         );
         let mut cipher_data: Vec<Vec<u8>> = Vec::new();

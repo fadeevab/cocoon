@@ -1,11 +1,11 @@
 use aes_gcm::{
-    aead::{generic_array::GenericArray, KeyInit},
     AeadInPlace, Aes256Gcm,
+    aead::{KeyInit, generic_array::GenericArray},
 };
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 use chacha20poly1305::ChaCha20Poly1305;
-use rand::{rngs::StdRng, RngCore, SeedableRng};
+use rand::{RngCore, SeedableRng, rngs::StdRng};
 #[cfg(feature = "std")]
 use std::io::{Read, Write};
 use zeroize::Zeroizing;
@@ -473,7 +473,9 @@ mod test {
         );
 
         assert_eq!(
-            &[98, 34, 35, 62, 28, 121, 71, 223, 170, 151, 215, 104, 52, 187],
+            &[
+                98, 34, 35, 62, 28, 121, 71, 223, 170, 151, 215, 104, 52, 187
+            ],
             &data[..]
         );
 
@@ -506,7 +508,9 @@ mod test {
         );
 
         assert_eq!(
-            &[41, 58, 226, 219, 28, 132, 21, 216, 165, 46, 246, 120, 10, 92],
+            &[
+                41, 58, 226, 219, 28, 132, 21, 216, 165, 46, 246, 120, 10, 92
+            ],
             &data[..]
         );
 
