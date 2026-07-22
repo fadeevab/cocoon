@@ -84,14 +84,13 @@ impl MiniCocoon {
     /// # Examples
     /// ```
     /// use cocoon::MiniCocoon;
-    /// use rand::Rng;
     ///
     /// // Seed can be obtained by any cryptographically secure random generator.
     /// // ThreadRng is used as an example.
-    /// let seed = rand::thread_rng().gen::<[u8; 32]>();
+    /// let seed = rand::random::<[u8; 32]>();
     ///
     /// // Key must be 32 bytes of length. Let it be another 32 random bytes.
-    /// let key = rand::thread_rng().gen::<[u8; 32]>();
+    /// let key = rand::random::<[u8; 32]>();
     ///
     /// let mut cocoon = MiniCocoon::from_key(&key, &seed);
     /// ```
@@ -121,11 +120,10 @@ impl MiniCocoon {
     /// # Examples
     /// ```
     /// use cocoon::MiniCocoon;
-    /// use rand::Rng;
     ///
     /// // Seed can be obtained by any cryptographically secure random generator.
     /// // ThreadRng is used as an example.
-    /// let seed = rand::thread_rng().gen::<[u8; 32]>();
+    /// let seed = rand::random::<[u8; 32]>();
     ///
     /// let mut cocoon = MiniCocoon::from_password(b"my password", &seed);
     /// ```
@@ -148,10 +146,9 @@ impl MiniCocoon {
     /// # Examples
     /// ```
     /// use cocoon::{MiniCocoon, CocoonCipher};
-    /// use rand::Rng;
     ///
-    /// let seed = rand::thread_rng().gen::<[u8; 32]>();
-    /// let key = rand::thread_rng().gen::<[u8; 32]>();
+    /// let seed = rand::random::<[u8; 32]>();
+    /// let key = rand::random::<[u8; 32]>();
     ///
     /// let mut cocoon = MiniCocoon::from_key(&key, &seed).with_cipher(CocoonCipher::Chacha20Poly1305);
     /// cocoon.wrap(b"my secret data");
@@ -168,10 +165,9 @@ impl MiniCocoon {
     /// Examples:
     /// ```
     /// # use cocoon::{MiniCocoon, Error};
-    /// # use rand::Rng;
     /// #
     /// # fn main() -> Result<(), Error> {
-    /// let seed = rand::thread_rng().gen::<[u8; 32]>();
+    /// let seed = rand::random::<[u8; 32]>();
     /// let mut cocoon = MiniCocoon::from_password(b"password", &seed);
     ///
     /// let wrapped = cocoon.wrap(b"my secret data")?;
@@ -181,7 +177,7 @@ impl MiniCocoon {
     /// # }
     /// ```
     #[cfg(feature = "alloc")]
-    #[cfg_attr(docs_rs, doc(cfg(any(feature = "alloc", feature = "std"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "alloc", feature = "std"))))]
     pub fn wrap(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
         // Allocation is needed because there is no way to prefix encrypted
         // data with a header without an allocation. It means that we need
@@ -211,13 +207,12 @@ impl MiniCocoon {
     /// # Examples
     /// ```
     /// # use cocoon::{MiniCocoon, Error};
-    /// # use rand::Rng;
     /// # use std::io::Cursor;
     /// #
     /// # fn main() -> Result<(), Error> {
     /// let key = [ 1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 11, 12, 13, 14, 15, 16,
     ///            17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
-    /// let seed = rand::thread_rng().gen::<[u8; 32]>();
+    /// let seed = rand::random::<[u8; 32]>();
     ///
     /// let mut cocoon = MiniCocoon::from_key(&key, &seed);
     /// # let mut file = Cursor::new(vec![0; 150]);
@@ -230,7 +225,7 @@ impl MiniCocoon {
     /// # Ok(())
     /// # }
     #[cfg(feature = "std")]
-    #[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
     pub fn dump(&mut self, mut data: Vec<u8>, writer: &mut impl Write) -> Result<(), Error> {
         let detached_prefix = self.encrypt(&mut data)?;
 
@@ -293,11 +288,10 @@ impl MiniCocoon {
     /// # Examples
     /// ```
     /// # use cocoon::{MiniCocoon, Error};
-    /// # use rand::Rng;
     /// #
     /// # fn main() -> Result<(), Error> {
     /// let key = b"0123456789abcdef0123456789abcdef";
-    /// let seed = rand::thread_rng().gen::<[u8; 32]>();
+    /// let seed = rand::random::<[u8; 32]>();
     ///
     /// let mut cocoon = MiniCocoon::from_key(key, &seed);
     ///
@@ -311,7 +305,7 @@ impl MiniCocoon {
     /// # }
     /// ```
     #[cfg(feature = "alloc")]
-    #[cfg_attr(docs_rs, doc(cfg(any(feature = "alloc", feature = "std"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "alloc", feature = "std"))))]
     pub fn unwrap(&self, container: &[u8]) -> Result<Vec<u8>, Error> {
         let prefix = MiniFormatPrefix::deserialize(container)?;
         let header = prefix.header();
@@ -336,12 +330,11 @@ impl MiniCocoon {
     /// # Examples
     /// ```
     /// # use cocoon::{MiniCocoon, Error};
-    /// # use rand::Rng;
     /// # use std::io::Cursor;
     /// #
     /// # fn main() -> Result<(), Error> {
     /// let key = b"0123456789abcdef0123456789abcdef";
-    /// let seed = rand::thread_rng().gen::<[u8; 32]>();
+    /// let seed = rand::random::<[u8; 32]>();
     ///
     /// let mut cocoon = MiniCocoon::from_key(key, &seed);
     /// # let mut file = Cursor::new(vec![0; 150]);
@@ -360,7 +353,7 @@ impl MiniCocoon {
     /// # }
     /// ```
     #[cfg(feature = "std")]
-    #[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
     pub fn parse(&self, reader: &mut impl Read) -> Result<Vec<u8>, Error> {
         let prefix = MiniFormatPrefix::deserialize_from(reader)?;
         let mut body = vec![0; prefix.header().data_length()];

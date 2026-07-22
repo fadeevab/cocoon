@@ -1,5 +1,3 @@
-use core::convert::{TryFrom, TryInto};
-
 use super::error::Error;
 
 /// Safe deserializing from byte to enum.

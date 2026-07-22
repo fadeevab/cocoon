@@ -258,7 +258,7 @@
 #![forbid(unsafe_code)]
 #![warn(missing_docs, unused_qualifications)]
 #![cfg_attr(not(feature = "std"), no_std)]
-#![cfg_attr(docs_rs, feature(doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 mod error;
 mod format;
@@ -430,7 +430,7 @@ pub struct Cocoon<'a, M> {
 }
 
 #[cfg(feature = "std")]
-#[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
+#[cfg_attr(docsrs, doc(cfg(feature = "std")))]
 impl<'a> Cocoon<'a, Creation> {
     /// Creates a new [`Cocoon`] with [`ThreadRng`] random generator under the hood
     /// and a [Default Configuration](#default-configuration).
@@ -464,11 +464,10 @@ impl<'a> Cocoon<'a, Creation> {
     /// # Examples
     /// ```
     /// use cocoon::Cocoon;
-    /// use rand::Rng;
     ///
     /// // Seed can be obtained by any cryptographically secure random generator.
     /// // ThreadRng is used just for example.
-    /// let seed = rand::thread_rng().gen::<[u8; 32]>();
+    /// let seed = rand::random::<[u8; 32]>();
     ///
     /// let mut cocoon = Cocoon::from_seed(b"password", seed);
     /// ```
@@ -525,7 +524,7 @@ impl<'a> Cocoon<'a, Creation> {
     /// let mut cocoon = Cocoon::from_entropy(b"password");
     /// ```
     #[cfg(any(feature = "getrandom", test))]
-    #[cfg_attr(docs_rs, doc(cfg(feature = "getrandom")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "getrandom")))]
     pub fn from_entropy(password: &'a [u8]) -> Self {
         Cocoon {
             password,
@@ -641,7 +640,7 @@ impl<'a> Cocoon<'a, Creation> {
     /// # }
     /// ```
     #[cfg(feature = "alloc")]
-    #[cfg_attr(docs_rs, doc(cfg(any(feature = "alloc", feature = "std"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "alloc", feature = "std"))))]
     pub fn wrap(&mut self, data: &[u8]) -> Result<Vec<u8>, Error> {
         // Allocation is needed because there is no way to prefix encrypted
         // data with a header without an allocation. It means that we need
@@ -685,7 +684,7 @@ impl<'a> Cocoon<'a, Creation> {
     /// # Ok(())
     /// # }
     #[cfg(feature = "std")]
-    #[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
     pub fn dump(&mut self, mut data: Vec<u8>, writer: &mut impl Write) -> Result<(), Error> {
         let detached_prefix = self.encrypt(&mut data)?;
 
@@ -788,7 +787,7 @@ impl<'a, M> Cocoon<'a, M> {
     /// # }
     /// ```
     #[cfg(feature = "alloc")]
-    #[cfg_attr(docs_rs, doc(cfg(any(feature = "alloc", feature = "std"))))]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "alloc", feature = "std"))))]
     pub fn unwrap(&self, container: &[u8]) -> Result<Vec<u8>, Error> {
         let prefix = FormatPrefix::deserialize(container)?;
         let header = prefix.header();
@@ -833,7 +832,7 @@ impl<'a, M> Cocoon<'a, M> {
     /// # }
     /// ```
     #[cfg(feature = "std")]
-    #[cfg_attr(docs_rs, doc(cfg(feature = "std")))]
+    #[cfg_attr(docsrs, doc(cfg(feature = "std")))]
     pub fn parse(&self, reader: &mut impl Read) -> Result<Vec<u8>, Error> {
         let prefix = FormatPrefix::deserialize_from(reader)?;
         let mut body = vec![0; prefix.header().data_length()];

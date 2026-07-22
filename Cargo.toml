@@ -6,7 +6,8 @@ authors = ["Alexander Fadeev <fadeevab.com@gmail.com>"]
 categories = ["cryptography", "no-std", "parser-implementations"]
 description = "A simple protected container with strong encryption and format validation."
 documentation = "https://docs.rs/cocoon"
-edition = "2018"
+edition = "2024"
+rust-version = "1.85"
 homepage = "https://github.com/fadeevab/cocoon"
 keywords = ["encryption", "storage", "keystore", "parser", "container"]
 license = "MIT"
@@ -50,4 +51,4 @@ opt-level = 3
 
 [package.metadata.docs.rs]
 all-features = true
-rustdoc-args = ["--cfg", "docs_rs"]
+rustdoc-args = ["--cfg", "docsrs"]
