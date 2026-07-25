@@ -38,6 +38,6 @@ jobs:
       - name: Generate code coverage
         run: mkdir coverage && cargo llvm-cov --tests --all-features --lcov --output-path ./coverage/lcov.info
       - name: Send to Coveralls
-        uses: coverallsapp/github-action@master
+        uses: coverallsapp/github-action@v2.3.6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
