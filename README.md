@@ -121,7 +121,7 @@ fn main() -> Result<(), Error> {
     db.inner.insert("my.email@example.com".to_string(), "eKPV$PM8TV5A2".to_string());
 
     // You can choose how to serialize data. Also, you can compress it.
-    let encoded = db.try_to_vec().unwrap();
+    let encoded = borsh::to_vec(&db).unwrap();
 
     // Finally, you want to store your data secretly.
     // Supply some password to Cocoon: it can be any byte array, basically.

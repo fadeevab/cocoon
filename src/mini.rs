@@ -1,11 +1,11 @@
 use aes_gcm::{
-    AeadInPlace, Aes256Gcm,
-    aead::{KeyInit, generic_array::GenericArray},
+    AeadInOut, Aes256Gcm,
+    aead::{KeyInit, array::Array},
 };
 #[cfg(feature = "alloc")]
 use alloc::vec::Vec;
 use chacha20poly1305::ChaCha20Poly1305;
-use rand::{RngCore, SeedableRng, rngs::StdRng};
+use rand::{Rng, SeedableRng, rngs::StdRng};
 #[cfg(feature = "std")]
 use std::io::{Read, Write};
 use zeroize::Zeroizing;
@@ -21,7 +21,6 @@ use super::{
 pub const MINI_PREFIX_SIZE: usize = MiniFormatPrefix::SERIALIZE_SIZE;
 
 /// This is a mini cocoon for a convenient and cool encryption.
-#[derive(Clone)]
 pub struct MiniCocoon {
     key: Zeroizing<[u8; KEY_SIZE]>,
     rng: StdRng,
@@ -74,6 +73,12 @@ pub struct MiniCocoon {
 /// | [`MiniCocoon::unwrap`]        | ✔️    | ✔️      | ❌      |
 /// | [`MiniCocoon::dump`]          | ✔️    | ❌      | ❌      |
 /// | [`MiniCocoon::parse`]         | ✔️    | ❌      | ❌      |
+/// | [`Clone`][^1]                 | ✔️    | ✔️[^2]  | ✔️[^2]  |
+///
+/// [^1]: A clone shares the key and the configuration, but its random generator is reseeded
+/// via [`rand::make_rng`], so the clone never generates the same nonces as the original.
+///
+/// [^2]: [`Clone`] is implemented when `getrandom` feature is enabled.
 impl MiniCocoon {
     /// Creates a new [`MiniCocoon`] with a symmetric key seeding a random generator
     /// using a given `seed` buffer.
@@ -264,17 +269,17 @@ impl MiniCocoon {
         let header = MiniCocoonHeader::new(nonce, data.len());
         let prefix = MiniFormatPrefix::new(header);
 
-        let nonce = GenericArray::from_slice(&nonce);
-        let key = GenericArray::clone_from_slice(self.key.as_ref());
+        let nonce = Array::from(nonce);
+        let key = (&*self.key).into();
 
         let tag: [u8; 16] = match self.config.cipher() {
             CocoonCipher::Chacha20Poly1305 => {
-                let cipher = ChaCha20Poly1305::new(&key);
-                cipher.encrypt_in_place_detached(nonce, prefix.prefix(), data)
+                let cipher = ChaCha20Poly1305::new(key);
+                cipher.encrypt_inout_detached(&nonce, prefix.prefix(), data.into())
             }
             CocoonCipher::Aes256Gcm => {
-                let cipher = Aes256Gcm::new(&key);
-                cipher.encrypt_in_place_detached(nonce, prefix.prefix(), data)
+                let cipher = Aes256Gcm::new(key);
+                cipher.encrypt_inout_detached(&nonce, prefix.prefix(), data.into())
             }
         }
         .map_err(|_| Error::Cryptography)?
@@ -410,23 +415,40 @@ impl MiniCocoon {
 
         nonce.copy_from_slice(header.nonce());
 
-        let nonce = GenericArray::from_slice(&nonce);
-        let master_key = GenericArray::clone_from_slice(self.key.as_ref());
-        let tag = GenericArray::from_slice(detached_prefix.tag());
+        let nonce = Array::from(nonce);
+        let master_key = (&*self.key).into();
+        let tag = Array::try_from(detached_prefix.tag()).map_err(|_| Error::Cryptography)?;
 
         match self.config.cipher() {
             CocoonCipher::Chacha20Poly1305 => {
-                let cipher = ChaCha20Poly1305::new(&master_key);
-                cipher.decrypt_in_place_detached(nonce, detached_prefix.prefix(), data, tag)
+                let cipher = ChaCha20Poly1305::new(master_key);
+                cipher.decrypt_inout_detached(&nonce, detached_prefix.prefix(), data.into(), &tag)
             }
             CocoonCipher::Aes256Gcm => {
-                let cipher = Aes256Gcm::new(&master_key);
-                cipher.decrypt_in_place_detached(nonce, detached_prefix.prefix(), data, tag)
+                let cipher = Aes256Gcm::new(master_key);
+                cipher.decrypt_inout_detached(&nonce, detached_prefix.prefix(), data.into(), &tag)
             }
         }
         .map_err(|_| Error::Cryptography)?;
 
         Ok(())
+    }
+}
+
+/// Clones the key and the configuration, and reseeds the random generator of the clone via
+/// [`rand::make_rng`] to avoid nonce reuse between the original and the clone.
+///
+/// # Panics
+/// Panics if the OS random generator fails to provide entropy.
+#[cfg(any(feature = "std", feature = "getrandom"))]
+#[cfg_attr(docsrs, doc(cfg(any(feature = "std", feature = "getrandom"))))]
+impl Clone for MiniCocoon {
+    fn clone(&self) -> Self {
+        MiniCocoon {
+            key: self.key.clone(),
+            rng: rand::make_rng(),
+            config: self.config.clone(),
+        }
     }
 }
 
@@ -447,7 +469,7 @@ mod test {
     fn mini_cocoon_clone() {
         let mut cocoon = MiniCocoon::from_password(b"password", &[0; 32]);
         let cloned_cocoon = cocoon.clone();
-        const DATA: &'static [u8] = b"my-sercet-data";
+        const DATA: &[u8] = b"my-sercet-data";
 
         // To check whether MiniCocoon gets cloned properly
         let wrapped = cocoon.wrap(DATA).unwrap();
@@ -455,6 +477,17 @@ mod test {
 
         let unwrapped = cloned_cocoon.unwrap(&wrapped).unwrap();
         assert_eq!(&unwrapped, DATA);
+    }
+
+    #[test]
+    fn mini_cocoon_clone_reseeds_rng() {
+        let mut cocoon = MiniCocoon::from_password(b"password", &[0; 32]);
+        let mut cloned_cocoon = cocoon.clone();
+
+        // The clone must not generate the same nonces as the original.
+        let prefix = cocoon.encrypt(&mut [0; 16]).unwrap();
+        let cloned_prefix = cloned_cocoon.encrypt(&mut [0; 16]).unwrap();
+        assert_ne!(prefix, cloned_prefix);
     }
 
     #[test]

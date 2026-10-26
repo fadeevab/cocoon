@@ -34,7 +34,8 @@ pub mod pbkdf2 {
             &ext_salt[..COCOON_PREFIX_LEN + salt.len()],
             iterations,
             &mut derived_key,
-        );
+        )
+        .expect("HMAC accepts passwords of any length");
 
         Zeroizing::new(derived_key)
     }

@@ -143,7 +143,7 @@
 //!     db.inner.insert("my.email@example.com".to_string(), "eKPV$PM8TV5A2".to_string());
 //!
 //!     // You can choose how to serialize data. Also, you can compress it.
-//!     let encoded = db.try_to_vec().unwrap();
+//!     let encoded = borsh::to_vec(&db).unwrap();
 //!
 //!     // Finally, you want to store your data secretly.
 //!     // Supply some password to Cocoon: it can be any byte array, basically.
@@ -171,7 +171,7 @@
 //! |--------------|------------------------------------------------------------------------------|
 //! | `std`        | Enables almost all API, including I/O, excluding `getrandom` feature.        |
 //! | `alloc`      | Enables API with memory allocation, but without [`std`] dependency.          |
-//! | `getrandom`  | Enables [`Cocoon::from_entropy`].                                            |
+//! | `getrandom`  | Enables [`Cocoon::from_entropy`] and [`Clone`] for [`MiniCocoon`].           |
 //! | `thiserror`  | Derives [`std::error::Error`] for [`cocoon::Error`](Error) via [`thiserror`].|
 //! |  no features | Creation and decryption a cocoon on the stack with no thread RNG, I/O, heap. |
 //!
@@ -272,13 +272,13 @@ extern crate alloc;
 use aes_gcm::{Aes256Gcm, KeyInit};
 use chacha20poly1305::{
     ChaCha20Poly1305,
-    aead::{AeadInPlace, generic_array::GenericArray},
+    aead::{AeadInOut, array::Array},
 };
 #[cfg(feature = "std")]
 use rand::rngs::ThreadRng;
 use rand::{
     rngs::StdRng,
-    {RngCore, SeedableRng},
+    {Rng, SeedableRng, TryRng},
 };
 
 #[cfg(feature = "alloc")]
@@ -490,6 +490,9 @@ impl<'a> Cocoon<'a, Creation> {
     ///
     /// This method can be used when [`ThreadRng`] is not accessible in build with no [`std`].
     ///
+    /// # Errors
+    /// Returns the error of the given `rng` if it fails to produce a seed.
+    ///
     /// # Examples
     /// ```
     /// use cocoon::Cocoon;
@@ -500,22 +503,30 @@ impl<'a> Cocoon<'a, Creation> {
     /// # let mut good_rng = rand::rngs::ThreadRng::default();
     /// let mut cocoon = Cocoon::from_rng(b"password", good_rng).unwrap();
     /// ```
-    pub fn from_rng<R: RngCore>(password: &'a [u8], rng: R) -> Result<Self, rand::Error> {
+    pub fn from_rng<R: TryRng>(password: &'a [u8], mut rng: R) -> Result<Self, R::Error> {
         Ok(Cocoon {
             password,
-            rng: RngVariant::Std(StdRng::from_rng(rng)?),
+            rng: RngVariant::Std(StdRng::try_from_rng(&mut rng)?),
             config: CocoonConfig::default(),
             _methods_marker: PhantomData,
         })
     }
 
-    /// Creates a new [`Cocoon`] with OS random generator using `getrandom` crate via
-    /// [`SeedableRng::from_entropy`].
+    /// Creates a new [`Cocoon`] with a random generator seeded via [`rand::make_rng`].
     ///
     /// * `password` - a shared reference to a password
     ///
+    /// The source of the seed depends on the enabled features:
+    /// * with `std`, the seed is taken from [`ThreadRng`] (which itself is periodically
+    ///   reseeded from the OS random generator);
+    /// * without `std`, the seed is taken directly from the OS random generator
+    ///   ([`SysRng`](rand::rngs::SysRng), using `getrandom` crate).
+    ///
     /// The method can be used to create [`Cocoon`] when [`ThreadRng`] is not accessible
     /// in build with no [`std`].
+    ///
+    /// # Panics
+    /// Panics if the OS random generator fails to provide entropy.
     ///
     /// # Examples
     /// ```
@@ -528,7 +539,7 @@ impl<'a> Cocoon<'a, Creation> {
     pub fn from_entropy(password: &'a [u8]) -> Self {
         Cocoon {
             password,
-            rng: RngVariant::Std(StdRng::from_entropy()),
+            rng: RngVariant::Std(rand::make_rng()),
             config: CocoonConfig::default(),
             _methods_marker: PhantomData,
         }
@@ -745,17 +756,17 @@ impl<'a> Cocoon<'a, Creation> {
             }
         };
 
-        let nonce = GenericArray::from_slice(&nonce);
-        let master_key = GenericArray::clone_from_slice(master_key.as_ref());
+        let nonce = Array::from(nonce);
+        let master_key = (&*master_key).into();
 
         let tag: [u8; 16] = match self.config.cipher() {
             CocoonCipher::Chacha20Poly1305 => {
-                let cipher = ChaCha20Poly1305::new(&master_key);
-                cipher.encrypt_in_place_detached(nonce, prefix.prefix(), data)
+                let cipher = ChaCha20Poly1305::new(master_key);
+                cipher.encrypt_inout_detached(&nonce, prefix.prefix(), data.into())
             }
             CocoonCipher::Aes256Gcm => {
-                let cipher = Aes256Gcm::new(&master_key);
-                cipher.encrypt_in_place_detached(nonce, prefix.prefix(), data)
+                let cipher = Aes256Gcm::new(master_key);
+                cipher.encrypt_inout_detached(&nonce, prefix.prefix(), data.into())
             }
         }
         .map_err(|_| Error::Cryptography)?
@@ -897,18 +908,18 @@ impl<'a, M> Cocoon<'a, M> {
             }
         };
 
-        let nonce = GenericArray::from_slice(&nonce);
-        let master_key = GenericArray::clone_from_slice(master_key.as_ref());
-        let tag = GenericArray::from_slice(detached_prefix.tag());
+        let nonce = Array::from(nonce);
+        let master_key = (&*master_key).into();
+        let tag = Array::try_from(detached_prefix.tag()).map_err(|_| Error::Cryptography)?;
 
         match header.config().cipher() {
             CocoonCipher::Chacha20Poly1305 => {
-                let cipher = ChaCha20Poly1305::new(&master_key);
-                cipher.decrypt_in_place_detached(nonce, detached_prefix.prefix(), data, tag)
+                let cipher = ChaCha20Poly1305::new(master_key);
+                cipher.decrypt_inout_detached(&nonce, detached_prefix.prefix(), data.into(), &tag)
             }
             CocoonCipher::Aes256Gcm => {
-                let cipher = Aes256Gcm::new(&master_key);
-                cipher.decrypt_in_place_detached(nonce, detached_prefix.prefix(), data, tag)
+                let cipher = Aes256Gcm::new(master_key);
+                cipher.decrypt_inout_detached(&nonce, detached_prefix.prefix(), data.into(), &tag)
             }
         }
         .map_err(|_| Error::Cryptography)?;
@@ -929,7 +940,7 @@ mod test {
         Cocoon::new(b"password").with_cipher(CocoonCipher::Aes256Gcm);
         Cocoon::from_seed(b"another password", [0; 32]).with_weak_kdf();
         Cocoon::from_entropy(b"new password");
-        Cocoon::from_rng(b"password", rand::thread_rng()).unwrap();
+        Cocoon::from_rng(b"password", rand::rng()).unwrap();
         Cocoon::parse_only(b"password");
     }
 

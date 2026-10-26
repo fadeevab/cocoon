@@ -15,31 +15,32 @@ readme = "README.md"
 repository = "https://github.com/fadeevab/cocoon"
 
 [dependencies]
-aes-gcm = {version = "0.10", default-features = false, features = ["aes"]}
-chacha20poly1305 = {version = "0.10", default-features = false}
-hmac = "0.11"
-pbkdf2 = {version = "0.9", default-features = false, features = ["sha2", "hmac"]}
-rand = {version = "0.8", default-features = false, features = ["std_rng"]}
-sha2 = {version = "0.9", default-features = false}
-thiserror = {version = "1.0.61", optional = true}
+aes-gcm = {version = "0.11", default-features = false, features = ["aes"]}
+chacha20poly1305 = {version = "0.11", default-features = false}
+hmac = "0.13"
+pbkdf2 = {version = "0.13", default-features = false, features = ["sha2", "hmac"]}
+rand = {version = "0.10", default-features = false, features = ["std_rng"]}
+sha2 = {version = "0.11", default-features = false}
+thiserror = {version = "2.0", optional = true}
 zeroize = {version = "1", default-features = false}
 
 [dev-dependencies]
-borsh = "0.9"
+borsh = {version = "1.8", features = ["derive"]}
 
 [features]
 # Enables `std` feature by default.
 default = ["std"]
 
-# Enables all features, including support of simplified Cocoon API, using `rand::thread_rng`,
+# Enables all features, including support of simplified Cocoon API, using `rand::rng`,
 # and API related to `std::io`: wrap to writer, unwrap from reader.
-std = ["alloc", "rand/std"]
+std = ["alloc", "rand/thread_rng"]
 
 # Enables `Vec` container. Can be used without `std` crate (in "no std" build).
 alloc = ["chacha20poly1305/alloc"]
 
-# Enables support of Cocoon::from_entropy() which gets random bytes from OsRng.
-getrandom = ["rand/getrandom"]
+# Enables support of Cocoon::from_entropy() and MiniCocoon::clone() which get random bytes
+# from SysRng (MiniCocoon::clone() is also available with `std`).
+getrandom = ["rand/sys_rng"]
 
 # To speed up PBKDF2.
 [profile.test]
